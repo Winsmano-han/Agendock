@@ -36,3 +36,8 @@ HACKATHON_RAIN/services/api/uploads/
 Thumbs.db
 .vscode/
 
+# Bundled Node binaries (prefer installing Node normally)
+HACKATHON_RAIN/agentdock-frontend/node/
+HACKATHON_RAIN/agentdock-frontend/node.exe
+HACKATHON_RAIN/agentdock-frontend/nodejs.msi
+HACKATHON_RAIN/agentdock-frontend/node.zip

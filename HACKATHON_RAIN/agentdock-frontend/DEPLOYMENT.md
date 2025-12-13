@@ -29,5 +29,8 @@ Notes:
 
 ## What to deploy for the API
 
-For a proper demo, deploy the API as well (Render/Fly/railway/etc). If you keep the API local, Vercel users won’t be able to log in or use conversations unless the API is tunneled publicly.
+For a proper demo, deploy the API as well.
 
+Recommended (single backend): deploy `HACKATHON_RAIN/services/api` with embedded AI enabled:
+- Set `USE_EMBEDDED_AI=1` and `GROQ_API_KEY=...` on the API service.
+- Twilio WhatsApp webhook should point to: `https://YOUR_API_URL/webhook/whatsapp`

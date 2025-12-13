@@ -1,5 +1,6 @@
 param(
   [switch]$KillPorts,
+  [switch]$StartLegacyServices,
   [int]$FrontendPort = 3002,
   [int]$ApiPort = 5000,
   [int]$AiPort = 5002,
@@ -63,9 +64,11 @@ $apiDir = Join-Path $root "services\\api"
 $waDir = Join-Path $root "services\\whatsapp"
 $feDir = Join-Path $root "agentdock-frontend"
 
-Start-ServiceWindow "AgentDock - AI (5002)" $aiDir "& '$python' app.py"
 Start-ServiceWindow "AgentDock - API (5000)" $apiDir "& '$python' app.py"
-Start-ServiceWindow "AgentDock - WhatsApp (5001)" $waDir "& '$python' app.py"
+if ($StartLegacyServices) {
+  Start-ServiceWindow "AgentDock - AI (5002)" $aiDir "& '$python' app.py"
+  Start-ServiceWindow "AgentDock - WhatsApp (5001)" $waDir "& '$python' app.py"
+}
 
 $nodeDir = Join-Path $feDir "node"
 $npmCmd = Join-Path $nodeDir "npm.cmd"
@@ -83,8 +86,12 @@ Write-Host ""
 Write-Host "Started:"
 Write-Host "  Frontend: http://localhost:$FrontendPort"
 Write-Host "  API:      http://localhost:$ApiPort"
-Write-Host "  AI:       http://localhost:$AiPort"
-Write-Host "  WhatsApp: http://localhost:$WhatsappPort"
+if ($StartLegacyServices) {
+  Write-Host "  AI:       http://localhost:$AiPort"
+  Write-Host "  WhatsApp: http://localhost:$WhatsappPort"
+} else {
+  Write-Host "  WhatsApp webhook: http://localhost:$ApiPort/webhook/whatsapp"
+}
 Write-Host ""
 Write-Host "Tip: Run with -KillPorts to free ports first:"
 Write-Host "  .\\run-all.ps1 -KillPorts"

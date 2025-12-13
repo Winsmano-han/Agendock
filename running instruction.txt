@@ -35,6 +35,9 @@ From `HACKATHON_RAIN` root, run:
 cd "D:\Hackathon V2 twilo\HACKATHON_RAIN"
 powershell -ExecutionPolicy Bypass -File .\run-all.ps1 -KillPorts
 
+# If you want the old multi-service mode (separate AI + WhatsApp services):
+powershell -ExecutionPolicy Bypass -File .\run-all.ps1 -KillPorts -StartLegacyServices
+
 Stop all:
 powershell -ExecutionPolicy Bypass -File .\stop-all.ps1
 

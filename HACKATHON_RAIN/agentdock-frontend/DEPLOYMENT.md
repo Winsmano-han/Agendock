@@ -33,4 +33,6 @@ For a proper demo, deploy the API as well.
 
 Recommended (single backend): deploy `HACKATHON_RAIN/services/api` with embedded AI enabled:
 - Set `USE_EMBEDDED_AI=1` and `GROQ_API_KEY=...` on the API service.
+- Optionally rotate multiple Groq keys on rate limit:
+  - `GROQ_API_KEYS=key1,key2`
 - Twilio WhatsApp webhook should point to: `https://YOUR_API_URL/webhook/whatsapp`

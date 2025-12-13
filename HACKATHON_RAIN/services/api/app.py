@@ -46,6 +46,12 @@ RESET_TOKEN_TTL_SECONDS = int(os.getenv("RESET_TOKEN_TTL_SECONDS", str(30 * 60))
 
 # Embedded AI (for single-backend deployment)
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
+_GROQ_KEYS_RAW = os.getenv("GROQ_API_KEYS", "").strip()
+GROQ_API_KEYS: list[str] = []
+if _GROQ_KEYS_RAW:
+  GROQ_API_KEYS = [k.strip() for k in _GROQ_KEYS_RAW.split(",") if k.strip()]
+if GROQ_API_KEY and GROQ_API_KEY not in GROQ_API_KEYS:
+  GROQ_API_KEYS.append(GROQ_API_KEY)
 LLAMA_MODEL = os.getenv("LLAMA_MODEL", "llama-3.3-70b-versatile").strip()
 LLAMA_FALLBACK_MODEL = os.getenv("LLAMA_FALLBACK_MODEL", "llama-3.1-8b-instant").strip()
 AI_DEBUG = os.getenv("AI_DEBUG", "0").strip() in {"1", "true", "TRUE"}
@@ -670,21 +676,46 @@ def _groq_chat_completion(
   model_name: str,
   temperature: float = 0.6,
   max_tokens: int = 512,
-) -> str:
+) -> tuple[str, int]:
   if Groq is None:
     raise RuntimeError("groq package is not installed")
-  if not GROQ_API_KEY:
-    raise RuntimeError("GROQ_API_KEY is not set")
-  client = Groq(api_key=GROQ_API_KEY)
-  completion = client.chat.completions.create(
-    model=model_name,
-    messages=messages,
-    temperature=temperature,
-    max_tokens=max_tokens,
-    top_p=1,
-    stream=False,
-  )
-  return completion.choices[0].message.content or ""
+  if not GROQ_API_KEYS:
+    raise RuntimeError("GROQ_API_KEY(S) is not set")
+
+  def is_rate_limited(exc: Exception) -> bool:
+    msg = str(exc)
+    if "rate_limit" in msg.lower() or "rate limit" in msg.lower():
+      return True
+    if "429" in msg:
+      return True
+    status = getattr(exc, "status_code", None)
+    if status == 429:
+      return True
+    return False
+
+  last_exc: Optional[Exception] = None
+  for idx, key in enumerate(GROQ_API_KEYS):
+    try:
+      client = Groq(api_key=key)
+      completion = client.chat.completions.create(
+        model=model_name,
+        messages=messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        top_p=1,
+        stream=False,
+      )
+      return (completion.choices[0].message.content or "", idx)
+    except Exception as exc:
+      last_exc = exc
+      # Only rotate keys on rate limit exhaustion; other errors likely affect all keys.
+      if is_rate_limited(exc) and idx < len(GROQ_API_KEYS) - 1:
+        continue
+      raise
+
+  if last_exc is not None:
+    raise last_exc
+  raise RuntimeError("Groq completion failed")
 
 
 def _strip_code_fences(text: str) -> str:
@@ -819,13 +850,14 @@ def _embedded_ai_generate(payload: Dict[str, Any]) -> Dict[str, Any]:
 
   messages.append({"role": "user", "content": user_message})
 
-  debug: Dict[str, Any] = {"model_used": LLAMA_MODEL, "error_type": None}
+  debug: Dict[str, Any] = {"model_used": LLAMA_MODEL, "error_type": None, "groq_key_index": None}
 
   raw = ""
   reply_text = ""
   actions: List[Dict[str, Any]] = []
   try:
-    raw = _groq_chat_completion(messages, LLAMA_MODEL, temperature=0.6, max_tokens=512)
+    raw, key_idx = _groq_chat_completion(messages, LLAMA_MODEL, temperature=0.6, max_tokens=512)
+    debug["groq_key_index"] = key_idx
     marker = "ACTION_JSON:"
     if marker in raw:
       main, action_part = raw.split(marker, 1)
@@ -860,7 +892,8 @@ def _embedded_ai_generate(payload: Dict[str, Any]) -> Dict[str, Any]:
       # Try fallback model when available.
       try:
         debug["model_used"] = LLAMA_FALLBACK_MODEL
-        raw = _groq_chat_completion(messages, LLAMA_FALLBACK_MODEL, temperature=0.6, max_tokens=512)
+        raw, key_idx = _groq_chat_completion(messages, LLAMA_FALLBACK_MODEL, temperature=0.6, max_tokens=512)
+        debug["groq_key_index"] = key_idx
         reply_text = raw.strip()
         debug["error_type"] = "fallback_model"
       except Exception:
@@ -881,7 +914,11 @@ def _embedded_ai_generate(payload: Dict[str, Any]) -> Dict[str, Any]:
   return {
     "reply_text": reply_text,
     "actions": actions,
-    "meta": {"model_used": debug.get("model_used"), "error_type": debug.get("error_type")},
+    "meta": {
+      "model_used": debug.get("model_used"),
+      "error_type": debug.get("error_type"),
+      "groq_key_index": debug.get("groq_key_index"),
+    },
     "debug": debug if AI_DEBUG else None,
   }
 
@@ -2944,7 +2981,7 @@ def polish_text() -> tuple:
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_content},
       ]
-      content = _groq_chat_completion(messages, LLAMA_MODEL, temperature=0.5, max_tokens=256)
+      content, _ = _groq_chat_completion(messages, LLAMA_MODEL, temperature=0.5, max_tokens=256)
       clean = _strip_code_fences(content)
       try:
         data = json.loads(clean)
@@ -3048,7 +3085,7 @@ def faq_suggestions(tenant_id: int) -> tuple:
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_content},
       ]
-      content = _groq_chat_completion(messages, LLAMA_MODEL, temperature=0.5, max_tokens=640)
+      content, _ = _groq_chat_completion(messages, LLAMA_MODEL, temperature=0.5, max_tokens=640)
       clean = _strip_code_fences(content)
       data = {}
       try:
@@ -3166,7 +3203,7 @@ def conversation_summary(tenant_id: int, customer_id: int) -> tuple:
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_content},
       ]
-      content = _groq_chat_completion(messages, LLAMA_MODEL, temperature=0.4, max_tokens=384)
+      content, _ = _groq_chat_completion(messages, LLAMA_MODEL, temperature=0.4, max_tokens=384)
       clean = _strip_code_fences(content)
       data = json.loads(clean)
       summary = (data.get("summary") or "").strip() or summary
@@ -3273,7 +3310,7 @@ def coaching_insights(tenant_id: int) -> tuple:
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_content},
       ]
-      content = _groq_chat_completion(messages, LLAMA_MODEL, temperature=0.4, max_tokens=640)
+      content, _ = _groq_chat_completion(messages, LLAMA_MODEL, temperature=0.4, max_tokens=640)
       clean = _strip_code_fences(content)
       data = json.loads(clean)
       raw_insights = data.get("insights") or []
@@ -3425,7 +3462,7 @@ def setup_assistant() -> tuple:
         {"role": "user", "content": user_content},
       ]
 
-      content = _groq_chat_completion(messages, LLAMA_MODEL, temperature=0.5, max_tokens=512)
+      content, _ = _groq_chat_completion(messages, LLAMA_MODEL, temperature=0.5, max_tokens=512)
       clean = _strip_code_fences(content)
       data = {}
       try:

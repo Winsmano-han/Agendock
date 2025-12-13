@@ -1,0 +1,68 @@
+{
+  "name": "Your Business Name",
+  "business_type": "general",
+  "tagline": "Fast, friendly service.",
+  "location": "Your city, Nigeria",
+  "contact_phone": "+234 800 000 0000",
+  "whatsapp_number": "+234 800 000 0000",
+  "website": null,
+  "time_zone": "Africa/Lagos",
+  "opening_hours": {
+    "monday": "09:00-18:00",
+    "tuesday": "09:00-18:00",
+    "wednesday": "09:00-18:00",
+    "thursday": "09:00-18:00",
+    "friday": "09:00-18:00",
+    "saturday": "10:00-16:00",
+    "sunday": "closed"
+  },
+  "services": [
+    {
+      "id": "SVC1",
+      "name": "Service A",
+      "description": "Brief description of Service A.",
+      "duration_minutes": 30,
+      "price": 5000,
+      "category": "General"
+    },
+    {
+      "id": "SVC2",
+      "name": "Service B",
+      "description": "Brief description of Service B.",
+      "duration_minutes": 45,
+      "price": 8000,
+      "category": "General"
+    }
+  ],
+  "booking_rules": {
+    "booking_types": ["appointment", "walk_in"],
+    "max_days_in_advance": 14,
+    "buffer_minutes": 10,
+    "required_fields": ["full_name", "phone", "date", "time", "service"],
+    "late_policy": "Please arrive on time so we can serve you well.",
+    "no_show_policy": "If you miss your slot, we may ask you to rebook."
+  },
+  "payments": {
+    "currency": "NGN",
+    "methods": ["cash", "transfer", "POS"],
+    "deposit_required": false
+  },
+  "refunds": {
+    "cancellation_window_hours": 3,
+    "refund_policy": "Cancellations are accepted up to 3 hours before the booking time.",
+    "quality_policy": "If you are not satisfied, please contact us within 24 hours."
+  },
+  "voice_and_language": {
+    "tone": "friendly_professional",
+    "use_slang": false,
+    "languages": ["en"],
+    "avoid": []
+  },
+  "social": {
+    "instagram": null,
+    "facebook": null,
+    "tiktok": null,
+    "hashtags": []
+  }
+}
+

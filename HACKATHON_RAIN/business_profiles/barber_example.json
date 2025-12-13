@@ -1,0 +1,77 @@
+{
+  "name": "Fades and Blades Barber Shop",
+  "business_type": "barber",
+  "tagline": "Clean fades, sharp lines, zero stress.",
+  "location": "Yaba, Lagos (near XYZ bustop)",
+  "contact_phone": "+234 903 000 0000",
+  "whatsapp_number": "+234 903 000 0000",
+  "website": null,
+  "time_zone": "Africa/Lagos",
+  "opening_hours": {
+    "monday": "09:00-18:00",
+    "tuesday": "09:00-18:00",
+    "wednesday": "09:00-18:00",
+    "thursday": "09:00-18:00",
+    "friday": "09:00-18:00",
+    "saturday": "10:00-16:00",
+    "sunday": "closed"
+  },
+  "services": [
+    {
+      "id": "HC1",
+      "name": "Regular haircut",
+      "description": "Classic men’s haircut with simple style.",
+      "duration_minutes": 30,
+      "price": 3000,
+      "category": "Haircut"
+    },
+    {
+      "id": "HC2",
+      "name": "Fade + beard trim",
+      "description": "Skin fade with beard shaping and line up.",
+      "duration_minutes": 45,
+      "price": 4500,
+      "category": "Haircut"
+    },
+    {
+      "id": "HC3",
+      "name": "Kids haircut",
+      "description": "Gentle kids haircut for ages 4–12.",
+      "duration_minutes": 30,
+      "price": 2500,
+      "category": "Kids"
+    }
+  ],
+  "booking_rules": {
+    "booking_types": ["appointment", "walk_in"],
+    "max_days_in_advance": 7,
+    "buffer_minutes": 10,
+    "required_fields": ["full_name", "phone", "date", "time", "service"],
+    "late_policy": "If you are more than 15 minutes late, your slot may be given to someone else.",
+    "no_show_policy": "After 2 no-shows we may require a deposit before new bookings."
+  },
+  "payments": {
+    "currency": "NGN",
+    "methods": ["cash", "transfer", "POS"],
+    "deposit_required": false
+  },
+  "refunds": {
+    "cancellation_window_hours": 3,
+    "refund_policy": "You can cancel or reschedule up to 3 hours before your appointment. Deposits are non-refundable but can be moved to a new date once.",
+    "quality_policy": "If you are not satisfied, we offer a free touch-up within 3 days."
+  },
+  "voice_and_language": {
+    "tone": "friendly_casual",
+    "use_slang": true,
+    "languages": ["en", "pcm"],
+    "avoid": []
+  },
+  "social": {
+    "instagram": "@fadesandblades_ng",
+    "facebook": "Fades and Blades NG",
+    "tiktok": null,
+    "hashtags": ["#LagosBarber", "#FadeGameStrong"],
+    "needs_photo_consent": true
+  }
+}
+

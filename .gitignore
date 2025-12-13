@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+.python-version
+
+# Node / Next
+node_modules/
+.next/
+out/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.turbo/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Local DB / artifacts
+*.db
+*.sqlite
+*.sqlite3
+
+# Uploads / generated assets
+HACKATHON_RAIN/services/*/uploads/
+HACKATHON_RAIN/services/uploads/
+HACKATHON_RAIN/services/api/uploads/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+

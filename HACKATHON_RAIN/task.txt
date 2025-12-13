@@ -1,0 +1,326 @@
+Nice — let’s build this end-to-end. Below is a **practical, prioritized blueprint** you can follow from zero → hackathon demo → production. I’ll give architecture, data models, code snippets, prompt templates (multi-language), ML approach, deployment notes, testing plan, and a day-by-day workplan you can run with immediately.
+
+# Plan overview (high level)
+
+1. **MVP (Hackathon)** — WhatsApp AI that takes orders + saves to DB, auto-posts a “thank you” to Instagram/Facebook, and a simple CRM dashboard showing orders and inventory alerts.
+2. **v1** — Add multilingual quality, automated abandoned-cart messages, basic sales prediction for restock, customer profiles & segmentation.
+3. **Production** — Robust LLM retrieval memory, vector DB for personalization, analytics, payments, role/tenant support, monitoring & scaling.
+
+---
+
+# Phase A — Architecture (core components)
+
+* **WhatsApp Layer**: WhatsApp Cloud API (webhook for incoming messages, sender ID).
+* **AI Layer**: Llama 3 (via API) for NLU/NLG. Use a small prompt orchestration + retrieval for facts (menu, prices, inventory).
+* **Memory & Retrieval**: Vector DB (Chroma / Milvus / Pinecone) for conversation memory & embeddings.
+* **Database**: PostgreSQL for transactional data (orders, customers, inventory).
+* **Queue / Worker**: Redis + Celery (or RabbitMQ) to process long tasks (image generation, posting, analytics).
+* **Social Media**: Facebook Graph API / Instagram API for auto posts.
+* **CRM Dashboard**: React/Next.js frontend + REST/GraphQL API backend (FastAPI / Flask).
+* **ML Services**: Lightweight prediction microservice (Python, scikit-learn / Prophet) for sales forecasting and restock alerts.
+* **Storage**: AWS S3 / DigitalOcean Spaces for images & media.
+* **Auth & Admin**: JWT + role-based access for dashboard.
+
+Data flow (simplified):
+
+1. User → WhatsApp → webhook → enqueue message.
+2. Worker calls Llama 3 with current context + product DB (via retrieval).
+3. LLM responds → if order intent, create Order in DB → trigger post creation job and CRM update → optional auto-post to social.
+4. Analytics service consumes orders to update trends and inventory forecasts.
+
+---
+
+# Phase B — Database Schema (core tables)
+
+Use PostgreSQL. Example schema SQL:
+
+```sql
+-- customers
+CREATE TABLE customers (
+  id SERIAL PRIMARY KEY,
+  whatsapp_id TEXT UNIQUE,
+  name TEXT,
+  phone TEXT,
+  language TEXT, -- 'en','pcm','yo','ig','ha'
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- products
+CREATE TABLE products (
+  id SERIAL PRIMARY KEY,
+  sku TEXT UNIQUE,
+  name TEXT,
+  price NUMERIC,
+  inventory INT DEFAULT 0,
+  category TEXT,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- orders
+CREATE TABLE orders (
+  id SERIAL PRIMARY KEY,
+  customer_id INT REFERENCES customers(id),
+  items JSONB, -- [{product_id, qty, price}]
+  total NUMERIC,
+  status TEXT, -- 'pending','paid','fulfilled'
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- messages (for audit and training)
+CREATE TABLE messages (
+  id SERIAL PRIMARY KEY,
+  customer_id INT REFERENCES customers(id),
+  whatsapp_id TEXT,
+  direction TEXT, -- 'in','out'
+  text TEXT,
+  metadata JSONB,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- events (for triggers: post-created, abandoned-cart)
+CREATE TABLE events (
+  id SERIAL PRIMARY KEY,
+  type TEXT,
+  payload JSONB,
+  processed BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+---
+
+# Phase C — Prompting & Multilingual Handling
+
+**Strategy**: Use a global system prompt controlling behavior + language detection. Prefer simple prompts with examples (few-shot) and use retrieval of product facts to avoid hallucination.
+
+**System prompt (example)**:
+
+```
+You are AgentDock AI assistant for a small Nigerian business. Speak in the customer's language. Confirm orders, ask for quantity, price, and delivery/pickup. Always validate against the product list provided. When a user places an order, respond with a clear confirmation and send the order to the Orders API in JSON format.
+```
+
+**Language detection**: run a simple language detection model or use a small classifier (fastText) to set language code. For quick hackathon, detect keywords (Pidgin words like "how far", Yoruba "se?" etc.) or call Llama with "Detect language: <text>".
+
+**Prompt example (order confirmation — English)**:
+
+```
+Customer: I want 2 red Ankara dresses
+Assistant system: Retrieve product list. If "red Ankara dress" matches product id 123 (Ankara Flair Dress), respond:
+
+"Thanks! I’ve added 2x Ankara Flair Dress (sku:123) — total ₦18,000. Delivery or pickup?"
+<EXTRA: Emit ORDER_JSON: {"product_id":123,"qty":2,"price":9000,"customer_whatsapp_id":"..."} >
+```
+
+**Pidgin example** (short):
+
+```
+"Ok na! I don add 2 x Ankara Dress (₦9,000 each). You wan make we deliver or you go collect?"
+```
+
+I’ll give sample translations you can copy-paste for common phrases (confirmation, ask address, ask phone, thank you) — include them in the prompt templates.
+
+---
+
+# Phase D — WhatsApp webhook + processing (sample Flask)
+
+```python
+from flask import Flask, request, jsonify
+import requests, json
+app = Flask(__name__)
+
+@app.route('/whatsapp/webhook', methods=['POST'])
+def whatsapp_webhook():
+    data = request.json
+    # parse message
+    whatsapp_id = data['from']
+    text = data['text']['body']
+    # save raw message to messages table (db code omitted)
+    # enqueue processing job (e.g., Celery) with whatsapp_id, text
+    process_message_async.delay(whatsapp_id, text)
+    return jsonify(status='ok')
+
+# worker tasks pseudo
+from celery import Celery
+app = Celery(...)
+
+@app.task
+def process_message_async(whatsapp_id, text):
+    # 1) language detect
+    # 2) call Llama 3 API with system prompt + context + recent messages
+    # 3) parse assistant reply (detect if ORDER_JSON contains order)
+    # 4) create order in DB, publish event to events table
+    # 5) send reply back to WhatsApp via Cloud API
+    pass
+```
+
+**Message sending**: use WhatsApp Cloud API `messages` endpoint. Keep message templates for transactional messages to reduce rejection risk.
+
+---
+
+# Phase E — Auto social-posting flow
+
+1. When an order is created, push an `event("order_created")` with minimal info.
+2. Worker `post_generator` uses template: "Thank you {customer_name} for ordering {item}. Tag business: @yourhandle" + auto-generated image (use Canva / image API or template overlay with product photo + text).
+3. Use Facebook Graph API to post to Instagram (Business Account) or to a Facebook Page. (For hackathon, simulate post and show preview in dashboard).
+
+**Minimal safe approach**: For hackathon, generate post *preview* (image + caption) and require admin click to post. For production, allow auto-post with opt-in.
+
+---
+
+# Phase F — CRM Dashboard (features & UI)
+
+Minimal components for MVP:
+
+* Orders list (real-time).
+* Customers list (search by name / WhatsApp ID).
+* Inventory view with low-stock alerts (e.g., inventory < threshold shows banner).
+* Social post previews (pending / posted).
+* Simple charts: daily sales, top products (bar chart), trending words (word cloud).
+
+Stack:
+
+* Frontend: Next.js + Tailwind — pages: /dashboard, /orders, /customers, /inventory, /social.
+* Backend: FastAPI endpoints: `/api/orders`, `/api/customers`, `/api/products`, `/api/events`.
+* Auth: simple admin login JWT.
+
+---
+
+# Phase G — Sales forecast & restock alert (simple approach)
+
+* Use **rolling window average** or **exponential smoothing** for hackathon. For slightly better, use Facebook Prophet or a simple ARIMA model offline.
+* Input: historical daily sales per product for last 30–90 days.
+* Output: predicted weekly demand; if `predicted_weekly_demand > inventory`, create restock alert.
+
+Pseudo:
+
+```python
+from statsmodels.tsa.holtwinters import ExponentialSmoothing
+
+def predict_weekly(product_sales_ts):
+    model = ExponentialSmoothing(product_sales_ts, trend='add', seasonal=None)
+    model_fit = model.fit()
+    return model_fit.forecast(7).sum()
+```
+
+---
+
+# Phase H — Abandoned cart & nurture flows
+
+* Track carts: when order creation starts (user confirms intent) but not completed in X hours, create `abandoned_cart` event.
+* Worker sends friendly reminder on WhatsApp after 12–24 hours with limited offers or “need help completing order?” Use templates and rate limit to avoid spam.
+
+---
+
+# Phase I — Monitoring, safety & privacy
+
+* **Logging**: store messages with encryption at rest; rotate logs.
+* **PII**: Only store phone and name; avoid saving sensitive payment data in messages. Use tokens for payment systems.
+* **Rate Limits**: enforce outbound messaging throttles to comply with WhatsApp policies.
+* **User Opt-out**: always allow user to opt out of marketing messages. Persist opt-out state.
+
+---
+
+# Phase J — Deployment & operations
+
+* Containerize services (Docker). Compose for dev; Kubernetes for prod.
+* Use CI/CD (GitHub Actions) to run tests and deploy.
+* Secrets: store API keys in a secrets manager (AWS Secrets Manager / GitHub Secrets).
+* Observability: prometheus + grafana or simple logging to Papertrail.
+* Backups: nightly DB backups.
+
+---
+
+# Code & integration checklist (practical, immediate steps)
+
+1. Create repo with mono-repo structure: `/services/whatsapp`, `/services/ai`, `/services/worker`, `/web/dashboard`.
+2. Set up PostgreSQL and Redis locally.
+3. Implement WhatsApp webhook (Flask) and message persistence.
+4. Implement worker skeleton and call to Llama 3 (mock by echoing initially).
+5. Build product & orders DB CRUD. Seed the DB with sample products.
+6. Implement admin dashboard with orders list and inventory view (show seeded products).
+7. Add event when new order created → enqueue social post preview.
+8. Add language detection + simple prompt templates.
+9. Demo flow end-to-end with simulated WhatsApp messages (curl to webhook) and show dashboard update + preview social post.
+
+---
+
+# Security & compliance quick notes
+
+* WhatsApp template messages for outbound marketing: you must use approved templates. Transactional messages (order confirmations) are allowed. Keep marketing messages opt-in.
+* Data residency: if required, keep customer data in a region compliant with local laws.
+* LLM data: avoid sending payment details to LLM; use retrieval to provide product facts and keep prompts minimal.
+
+---
+
+# Hackathon 3-day plan (ultra granular)
+
+**Day 0 — Prep**
+
+* Register WhatsApp Cloud API, create app, get test phone number.
+* Get Llama 3 API access credentials (or a proxied LLM).
+
+**Day 1 — Core messaging + DB**
+
+* Build webhook that receives messages and stores them.
+* Build worker to call LLM and echo reply.
+* Create product DB and route to create simple orders with a single product.
+* Demo: send a message and see order appear in DB.
+
+**Day 2 — Dashboard + Social preview**
+
+* Build React dashboard showing orders, customers, products.
+* Build social post generator that creates caption + product image (template).
+* Wire order_created -> generate preview. Admin can click “Post” to simulate Graph API call.
+
+**Day 3 — Polish + Demo**
+
+* Add language templates & simple language detect.
+* Add abandoned cart trigger.
+* Add sales chart and inventory alert.
+* Do final end-to-end demo with real business sample.
+
+---
+
+# Example prompt templates & phrases (copyable)
+
+**English**
+
+* Order confirmation: `"Thanks {name}! I added {qty}x {product} — total ₦{total}. Delivery or pickup?"`
+* Ask address: `"Please send your delivery address and phone number."`
+* Thank you post caption: `"Thank you {name} for your order! ❤️ Today's favourite: {product}. Visit us at {handle}."`
+
+**Pidgin**
+
+* Order confirm: `"Tank yu {name}! I don add {qty} x {product}. Na delivery or you go pick am?"`
+
+**Yoruba**
+
+* `"E se {name}! Mo ti gba aṣẹ rẹ fun {qty} {product}. Ṣe a fi ranṣẹ tabi iwọ yoo wa gba?"`
+
+(You can expand these for Igbo and Hausa similarly; keep a short list of phrases per language.)
+
+---
+
+# Testing & metrics
+
+* **Functional tests**: webhook, order creation, worker processing, DB integrity.
+* **Conversation tests**: sample messages in each language and expected intents (order, question, cancel).
+* **Performance**: measure LLM latency; if >1s, use async user feedback (“checking…”) and push heavy tasks to background.
+* **Hackathon KPIs**: demo time to response, number of orders processed in demo, successful auto-post previews created, inventory alert fired.
+
+---
+
+# Deliverables I can produce next (pick any — I’ll just do it)
+
+* Full sequence diagrams & architecture diagram (SVG).
+* Ready-to-run Flask webhook + Celery worker code with Llama 3 stub.
+* Full React dashboard starter with orders & inventory pages.
+* Prompt library for 5 languages + utterance examples and evaluation testset.
+* SQL seed data and Docker Compose for rapid local demo.
+
+I won’t ask — I’ll start with the most impactful: **Flask webhook + worker + DB schema + Llama 3 prompt stubs** unless you tell me otherwise.
+Tell me if you’d prefer I: (A) generate the code now for the webhook + worker, or (B) create the React dashboard starter, or (C) produce the multi-language prompt library & test cases — I’ll start immediately on whichever you pick.
+
+
+
+

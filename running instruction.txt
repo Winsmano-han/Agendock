@@ -1,0 +1,52 @@
+
+cd C:\Users\DELL\Desktop\HACKATHON_RAIN
+.\.venv\Scripts\activate
+
+# now you can go into any service and run python
+cd services\ai
+python app.py
+
+# in another terminal:
+cd C:\Users\DELL\Desktop\HACKATHON_RAIN
+.\.venv\Scripts\activate
+cd services\api
+python app.py
+
+# and for WhatsApp:
+cd C:\Users\DELL\Desktop\HACKATHON_RAIN
+.\.venv\Scripts\activate
+cd services\whatsapp
+python app.py
+
+
+for the front end
+
+cd .\agentdock-frontend\
+$env:PATH = "$PWD\node;$env:PATH"
+node\npm run dev -- --port 3002for the front end
+ 
+cd .\agentdock-frontend\
+$env:PATH = "$PWD\node;$env:PATH"
+node\npm run dev -- --port 3002
+
+## One-command runner (recommended)
+From `HACKATHON_RAIN` root, run:
+
+cd "D:\Hackathon V2 twilo\HACKATHON_RAIN"
+powershell -ExecutionPolicy Bypass -File .\run-all.ps1 -KillPorts
+
+Stop all:
+powershell -ExecutionPolicy Bypass -File .\stop-all.ps1
+
+Port 3002 is already being used by an existing process (likely the previous next dev).
+
+Run these in PowerShell to find and kill it:
+
+Get-NetTCPConnection -LocalPort 3002 | Select-Object -First 1 OwningProcess
+Then replace <PID> with the number you get:
+
+Stop-Process -Id <PID> -Force
+Now start again:
+
+$env:PATH = "$PWD\node;$env:PATH"
+node\npm run dev -- --port 3002

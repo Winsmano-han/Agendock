@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>AgentDock Dashboard - {{ tenant.name }}</title>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        margin: 0;
+        padding: 1.5rem;
+        background: #f5f5f7;
+      }
+      h1, h2 {
+        margin: 0 0 0.75rem 0;
+      }
+      .layout {
+        display: flex;
+        gap: 1.5rem;
+        align-items: flex-start;
+      }
+      .card {
+        background: #ffffff;
+        border-radius: 8px;
+        padding: 1rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        flex: 1;
+        max-height: 80vh;
+        overflow-y: auto;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9rem;
+      }
+      th, td {
+        padding: 0.35rem 0.5rem;
+        border-bottom: 1px solid #eee;
+        vertical-align: top;
+      }
+      th {
+        text-align: left;
+        font-weight: 600;
+        background: #fafafa;
+      }
+      .direction-in {
+        color: #2563eb;
+        font-weight: 600;
+      }
+      .direction-out {
+        color: #16a34a;
+        font-weight: 600;
+      }
+      .status-pill {
+        display: inline-block;
+        padding: 0.15rem 0.4rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        text-transform: capitalize;
+      }
+      .status-pending {
+        background: #fef3c7;
+        color: #92400e;
+      }
+      .status-confirmed {
+        background: #dcfce7;
+        color: #166534;
+      }
+      .status-completed {
+        background: #e5e7eb;
+        color: #374151;
+      }
+      .status-cancelled {
+        background: #fee2e2;
+        color: #991b1b;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>AgentDock Dashboard</h1>
+    <p><strong>Business:</strong> {{ tenant.name }} ({{ tenant.business_type or "n/a" }})</p>
+
+    {% if whatsapp_link %}
+    <p>
+      <strong>WhatsApp link:</strong>
+      <a href="{{ whatsapp_link }}" target="_blank" rel="noopener noreferrer">{{ whatsapp_link }}</a><br />
+      <small>Customers who start from this link will be routed using code <code>{{ whatsapp_code }}</code>.</small>
+    </p>
+    {% else %}
+    <p><em>Set WHATSAPP_WA_NUMBER in the API service to generate a per-tenant WhatsApp link (format: START-{{ tenant.id }}).</em></p>
+    {% endif %}
+
+    <div class="layout">
+      <div class="card">
+        <h2>Recent Messages</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>When</th>
+              <th>Direction</th>
+              <th>Text</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for m in messages %}
+            <tr>
+              <td>{{ m.created_at }}</td>
+              <td>
+                {% if m.direction == "in" %}
+                  <span class="direction-in">Customer → Agent</span>
+                {% else %}
+                  <span class="direction-out">Agent → Customer</span>
+                {% endif %}
+              </td>
+              <td>{{ m.text }}</td>
+            </tr>
+            {% endfor %}
+            {% if messages|length == 0 %}
+            <tr>
+              <td colspan="3">No messages yet.</td>
+            </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h2>Appointments</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>When</th>
+              <th>Customer</th>
+              <th>Phone</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for a in appointments %}
+            <tr>
+              <td>{{ a.start_time }}</td>
+              <td>{{ a.customer_name or "-" }}</td>
+              <td>{{ a.customer_phone or "-" }}</td>
+              <td>
+                <span class="status-pill status-{{ a.status|lower }}">{{ a.status }}</span>
+              </td>
+            </tr>
+            {% endfor %}
+            {% if appointments|length == 0 %}
+            <tr>
+              <td colspan="4">No appointments yet.</td>
+            </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </body>
+</html>

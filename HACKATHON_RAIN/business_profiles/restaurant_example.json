@@ -1,0 +1,70 @@
+{
+  "name": "TasteHub Kitchen",
+  "business_type": "restaurant",
+  "tagline": "Fresh meals, fast delivery.",
+  "location": "Lekki, Lagos",
+  "contact_phone": "+234 800 111 2222",
+  "whatsapp_number": "+234 800 111 2222",
+  "website": null,
+  "time_zone": "Africa/Lagos",
+  "opening_hours": {
+    "monday": "10:00-20:00",
+    "tuesday": "10:00-20:00",
+    "wednesday": "10:00-20:00",
+    "thursday": "10:00-20:00",
+    "friday": "10:00-21:00",
+    "saturday": "11:00-21:00",
+    "sunday": "12:00-18:00"
+  },
+  "services": [
+    {
+      "id": "MENU1",
+      "name": "Jollof rice + chicken",
+      "description": "Smoky jollof rice with grilled chicken.",
+      "duration_minutes": null,
+      "price": 4500,
+      "category": "Meals"
+    },
+    {
+      "id": "MENU2",
+      "name": "Ofada rice + stew",
+      "description": "Ofada rice served with ayamase stew.",
+      "duration_minutes": null,
+      "price": 5500,
+      "category": "Meals"
+    },
+    {
+      "id": "MENU3",
+      "name": "Small chops tray",
+      "description": "Spring rolls, puff-puff, samosa, and more.",
+      "duration_minutes": null,
+      "price": 8000,
+      "category": "Snacks"
+    }
+  ],
+  "booking_rules": {
+    "booking_types": ["delivery", "pickup", "dine_in"],
+    "max_days_in_advance": 2,
+    "buffer_minutes": 0,
+    "required_fields": ["full_name", "phone"],
+    "late_policy": "Pickup orders are held for 15 minutes after the agreed time.",
+    "no_show_policy": "For large orders we may request a deposit."
+  },
+  "payments": {
+    "currency": "NGN",
+    "methods": ["transfer", "POS"],
+    "deposit_required": false
+  },
+  "refunds": {
+    "cancellation_window_hours": 1,
+    "refund_policy": "If an order has not been prepared, it can be cancelled within 1 hour.",
+    "quality_policy": "If anything is wrong with your order, let us know within 30 minutes for a replacement."
+  },
+  "voice_and_language": {
+    "tone": "friendly_casual",
+    "use_slang": true,
+    "languages": ["en", "pcm"],
+    "avoid": []
+  }
+}
+

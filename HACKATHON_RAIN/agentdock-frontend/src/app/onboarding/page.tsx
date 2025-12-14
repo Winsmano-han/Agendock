@@ -54,6 +54,7 @@ export default function OnboardingPage() {
     name: '',
     business_type: 'general',
     time_zone: 'Africa/Lagos',
+    payments: { currency: 'NGN' },
     opening_hours: {
       monday: '09:00-18:00',
       tuesday: '09:00-18:00',
@@ -64,7 +65,13 @@ export default function OnboardingPage() {
       sunday: 'closed',
     },
     services: [
-      { name: '', description: '', duration_minutes: 30, price: 0, category: '' },
+      {
+        name: '',
+        description: '',
+        duration_minutes: 30,
+        price: undefined,
+        category: '',
+      },
     ],
   })
 
@@ -145,7 +152,13 @@ export default function OnboardingPage() {
       ...prev,
       services: [
         ...(prev.services || []),
-        { name: '', description: '', duration_minutes: 30, price: 0, category: '' },
+        {
+          name: '',
+          description: '',
+          duration_minutes: 30,
+          price: undefined,
+          category: '',
+        },
       ],
     }))
   }
@@ -473,6 +486,40 @@ export default function OnboardingPage() {
 
                 {activeStep.key === 'services' && (
                   <div className="space-y-4">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+                      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-semibold text-slate-900 dark:text-white">
+                            Pricing settings
+                          </div>
+                          <div className="text-xs text-slate-500 dark:text-slate-300 mt-1">
+                            Choose the currency your customers see across the app.
+                          </div>
+                        </div>
+                        <div className="w-full sm:w-48">
+                          <label className={labelBase}>Currency</label>
+                          <select
+                            value={profile.payments?.currency || 'NGN'}
+                            onChange={(e) =>
+                              setProfile((prev) => ({
+                                ...prev,
+                                payments: {
+                                  ...(prev.payments || {}),
+                                  currency: e.target.value,
+                                },
+                              }))
+                            }
+                            className={inputBase}
+                          >
+                            <option value="NGN">NGN (₦)</option>
+                            <option value="USD">USD ($)</option>
+                            <option value="GBP">GBP (£)</option>
+                            <option value="EUR">EUR (€)</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
                     {(profile.services || []).map((s, idx) => (
                       <div
                         key={idx}
@@ -515,14 +562,23 @@ export default function OnboardingPage() {
                             />
                           </div>
                           <div>
-                            <label className={labelBase}>Price</label>
+                            <label className={labelBase}>
+                              Price ({profile.payments?.currency || 'NGN'})
+                            </label>
                             <input
-                              type="number"
-                              value={s.price ?? 0}
-                              onChange={(e) =>
-                                updateService(idx, { price: Number(e.target.value) })
-                              }
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              value={s.price == null ? '' : String(s.price)}
+                              onChange={(e) => {
+                                const digitsOnly = e.target.value.replace(/[^\d]/g, '')
+                                const normalized = digitsOnly.replace(/^0+(?=\d)/, '')
+                                updateService(idx, {
+                                  price:
+                                    normalized === '' ? undefined : Number(normalized),
+                                })
+                              }}
                               className={inputBase}
+                              placeholder="3000"
                             />
                           </div>
                           <div>
@@ -716,4 +772,3 @@ export default function OnboardingPage() {
     </div>
   )
 }
-

@@ -237,6 +237,16 @@ export const api = {
     })
   },
 
+  async markConversationRead(tenantId: number, customerId: number) {
+    return fetchJson(
+      `${getApiBaseUrl()}/tenants/${tenantId}/conversations/${customerId}/read`,
+      {
+        method: 'POST',
+        headers: { ...getAuthHeaders() },
+      },
+    )
+  },
+
   async setupAssistant(params: {
     tenant_id: number
     message: string

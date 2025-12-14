@@ -9,6 +9,8 @@ import { api, BusinessProfile } from '@/utils/api'
 
 interface Stats {
   messages_today: number
+  conversations_today?: number
+  unread_conversations?: number
   total_appointments: number
   most_requested_service_name: string | null
   most_requested_service_count: number
@@ -416,8 +418,15 @@ export default function DashboardPage() {
                   <div className="text-xs text-slate-500 dark:text-slate-400">
                     Chats today
                   </div>
-                  <div className="mt-1 text-2xl font-semibold text-slate-900 dark:text-white">
-                    {stats?.messages_today ?? 0}
+                  <div className="mt-1 flex items-center gap-2">
+                    <div className="text-2xl font-semibold text-slate-900 dark:text-white">
+                      {stats?.conversations_today ?? stats?.messages_today ?? 0}
+                    </div>
+                    {(stats?.unread_conversations || 0) > 0 && (
+                      <span className="inline-flex items-center rounded-full bg-blue-600 text-white px-2 py-0.5 text-[10px] font-semibold">
+                        {stats?.unread_conversations} unread
+                      </span>
+                    )}
                   </div>
                   <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
                     Open conversations →

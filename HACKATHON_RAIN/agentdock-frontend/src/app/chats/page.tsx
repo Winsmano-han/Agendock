@@ -20,6 +20,8 @@ type Conversation = {
   customer_name: string
   customer_phone: string | null
   state_mode?: string
+  unread_count?: number
+  last_read_at?: string | null
   last_message: string
   last_direction: 'in' | 'out'
   last_at: string
@@ -184,6 +186,21 @@ export default function ChatsPage() {
       setActiveConversation(convo)
 
       if (convo.customer_id != null) {
+        try {
+          await api.markConversationRead(tenantId, convo.customer_id)
+          setConversations((prev) =>
+            prev.map((c) =>
+              c.conversation_key === convo.conversation_key
+                ? { ...c, unread_count: 0, last_read_at: new Date().toISOString() }
+                : c,
+            ),
+          )
+        } catch {
+          // ignore read marker failures
+        }
+      }
+
+      if (convo.customer_id != null) {
         await loadSummary(tenantId, convo.customer_id)
       } else {
         resetSummary()
@@ -256,9 +273,13 @@ export default function ChatsPage() {
           </button>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm h-[32rem] flex overflow-hidden">
+        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm h-[calc(100vh-12rem)] sm:h-[32rem] flex flex-col sm:flex-row overflow-hidden">
           {/* Left: conversation list */}
-          <div className="w-64 border-r border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 flex flex-col">
+          <div
+            className={`border-r border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 flex flex-col w-full sm:w-72 ${
+              activeConversation ? 'hidden sm:flex' : 'flex'
+            }`}
+          >
             {conversations.length === 0 ? (
               <div className="flex-1 flex items-center justify-center text-xs text-gray-500 dark:text-gray-400 px-3 text-center">
                 No conversations yet. Try chatting with your agent from the
@@ -288,13 +309,18 @@ export default function ChatsPage() {
                           <span className="font-medium text-gray-900 dark:text-white truncate">
                             {convo.customer_name}
                           </span>
+                          {Boolean(convo.unread_count) && (convo.unread_count || 0) > 0 && (
+                            <span className="shrink-0 inline-flex items-center rounded-full bg-blue-600 text-white px-2 py-0.5 text-[10px] font-semibold">
+                              {(convo.unread_count || 0) > 99 ? '99+' : convo.unread_count}
+                            </span>
+                          )}
                           {convo.state_mode &&
                             convo.state_mode !== 'idle' &&
                             convo.state_mode !== 'unknown' && (
-                              <span className="shrink-0 inline-flex items-center rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200 px-2 py-0.5 text-[10px] font-medium">
-                                {convo.state_mode.split('_').join(' ')}
-                              </span>
-                            )}
+                            <span className="shrink-0 inline-flex items-center rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200 px-2 py-0.5 text-[10px] font-medium">
+                              {convo.state_mode.split('_').join(' ')}
+                            </span>
+                          )}
                         </div>
                         <span className="text-[10px] text-gray-500 dark:text-gray-400">
                           {lastTime}
@@ -317,7 +343,36 @@ export default function ChatsPage() {
           </div>
 
           {/* Right: message thread */}
-          <div className="flex-1 flex flex-col bg-gray-50 dark:bg-slate-950">
+          <div
+            className={`flex-1 flex flex-col bg-gray-50 dark:bg-slate-950 ${
+              activeConversation ? 'flex' : 'hidden sm:flex'
+            }`}
+          >
+            {activeConversation && (
+              <div className="sm:hidden px-4 py-3 border-b border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveConversation(null)
+                    setMessages([])
+                    resetSummary()
+                  }}
+                  className="shrink-0 text-xs font-semibold text-blue-600 dark:text-blue-300"
+                >
+                  Back
+                </button>
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                    {activeConversation.customer_name}
+                  </div>
+                  <div className="text-[11px] text-gray-500 dark:text-slate-400 truncate">
+                    {activeConversation.customer_phone ||
+                      activeConversation.conversation_key}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {!activeConversation || messages.length === 0 ? (
               <div className="flex-1 flex items-center justify-center text-sm text-gray-600 dark:text-gray-300 px-4 text-center">
                 {conversations.length === 0

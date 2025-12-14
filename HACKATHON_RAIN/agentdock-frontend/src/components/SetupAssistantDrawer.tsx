@@ -131,7 +131,7 @@ export default function SetupAssistantDrawer({
   return (
     <div className="fixed inset-0 z-50">
       <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/15"
         onClick={onClose}
       />
       <div className="absolute right-0 top-0 h-full w-full sm:w-[28rem] bg-white dark:bg-slate-950 border-l border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col">

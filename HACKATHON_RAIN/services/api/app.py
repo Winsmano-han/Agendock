@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request, send_from_directory
 from flask_cors import CORS
 from flask import Response, stream_with_context
-from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, create_engine, text
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, UniqueConstraint, and_, create_engine, text
 from sqlalchemy.orm import Session, declarative_base, relationship, scoped_session, sessionmaker
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -274,6 +274,22 @@ class CustomerState(Base):
   customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True)
   customer_phone = Column(String, nullable=True, index=True)
   state = Column(JSON, nullable=True)
+  created_at = Column(DateTime, default=datetime.utcnow)
+  updated_at = Column(DateTime, default=datetime.utcnow)
+
+
+class ConversationRead(Base):
+  """
+  Tracks what the business owner has already viewed, per tenant + customer.
+  Used to compute unread message badges and unique-conversation stats.
+  """
+  __tablename__ = "conversation_reads"
+  __table_args__ = (UniqueConstraint("tenant_id", "customer_id", name="uq_convo_read_tenant_customer"),)
+
+  id = Column(Integer, primary_key=True, index=True)
+  tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+  customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
+  last_read_at = Column(DateTime, nullable=True)
   created_at = Column(DateTime, default=datetime.utcnow)
   updated_at = Column(DateTime, default=datetime.utcnow)
 
@@ -2886,13 +2902,57 @@ def tenant_stats(tenant_id: int) -> tuple:
   today = datetime.utcnow().date()
   day_start = datetime(today.year, today.month, today.day)
 
+  from sqlalchemy import func
+
   messages_today = (
     db.query(Message)
     .filter(Message.tenant_id == tenant_id, Message.created_at >= day_start)
     .count()
   )
 
-  from sqlalchemy import func
+  conversations_today = int(
+    db.query(func.count(func.distinct(Message.customer_id)))
+    .filter(
+      Message.tenant_id == tenant_id,
+      Message.customer_id.isnot(None),
+      Message.created_at >= day_start,
+    )
+    .scalar()
+    or 0
+  )
+
+  # Unread conversations for the owner: conversations with incoming messages after last_read_at.
+  last_in_subq = (
+    db.query(
+      Message.customer_id.label("customer_id"),
+      func.max(Message.created_at).label("last_in_at"),
+    )
+    .filter(
+      Message.tenant_id == tenant_id,
+      Message.customer_id.isnot(None),
+      Message.direction == "in",
+    )
+    .group_by(Message.customer_id)
+    .subquery()
+  )
+
+  unread_conversations = int(
+    db.query(func.count())
+    .select_from(last_in_subq)
+    .outerjoin(
+      ConversationRead,
+      and_(
+        ConversationRead.tenant_id == tenant_id,
+        ConversationRead.customer_id == last_in_subq.c.customer_id,
+      ),
+    )
+    .filter(
+      last_in_subq.c.last_in_at
+      > func.coalesce(ConversationRead.last_read_at, datetime(1970, 1, 1))
+    )
+    .scalar()
+    or 0
+  )
 
   total_appointments = int(
     db.query(func.count(func.distinct(Appointment.start_time)))
@@ -2932,6 +2992,8 @@ def tenant_stats(tenant_id: int) -> tuple:
     jsonify(
       {
         "messages_today": messages_today,
+        "conversations_today": conversations_today,
+        "unread_conversations": unread_conversations,
         "total_appointments": total_appointments,
         "most_requested_service_name": most_requested_service_name,
         "most_requested_service_count": most_requested_service_count,
@@ -3635,6 +3697,16 @@ def tenant_conversations(tenant_id: int) -> tuple:
     .order_by(Message.created_at.desc())
   )
 
+  reads = (
+    db.query(ConversationRead)
+    .filter(ConversationRead.tenant_id == tenant_id)
+    .all()
+  )
+  read_by_customer_id: Dict[int, ConversationRead] = {}
+  for r in reads:
+    if r.customer_id is not None:
+      read_by_customer_id[int(r.customer_id)] = r
+
   states = (
     db.query(CustomerState)
     .filter(CustomerState.tenant_id == tenant_id)
@@ -3649,9 +3721,19 @@ def tenant_conversations(tenant_id: int) -> tuple:
       state_by_phone[str(st.customer_phone)] = st
 
   conversations: Dict[str, Dict[str, Any]] = {}
+  unread_counts: Dict[str, int] = {}
 
   for m, c in msg_query.limit(500):
     key = str(c.id) if c and c.id is not None else (c.phone if c and c.phone else "anonymous")
+    last_read_at = None
+    if c and c.id is not None and int(c.id) in read_by_customer_id:
+      last_read_at = read_by_customer_id[int(c.id)].last_read_at
+    if m.direction == "in" and last_read_at is not None and m.created_at > last_read_at:
+      unread_counts[key] = unread_counts.get(key, 0) + 1
+    elif m.direction == "in" and last_read_at is None and (c and c.id is not None):
+      # Never opened by owner yet -> treat as unread.
+      unread_counts[key] = unread_counts.get(key, 0) + 1
+
     if key in conversations:
       continue
 
@@ -3677,7 +3759,13 @@ def tenant_conversations(tenant_id: int) -> tuple:
       "last_message": m.text,
       "last_direction": m.direction,
       "last_at": m.created_at.isoformat(),
+      "last_read_at": last_read_at.isoformat() if last_read_at else None,
+      "unread_count": 0,
     }
+
+  # Attach unread counts (from limited scan; good enough for demo UI).
+  for key, convo in conversations.items():
+    convo["unread_count"] = int(unread_counts.get(key, 0))
 
   ordered = sorted(
     conversations.values(),
@@ -3686,6 +3774,35 @@ def tenant_conversations(tenant_id: int) -> tuple:
   )
 
   return jsonify(ordered), 200
+
+
+@app.route("/tenants/<int:tenant_id>/conversations/<int:customer_id>/read", methods=["POST"])
+def mark_conversation_read(tenant_id: int, customer_id: int) -> tuple:
+  """
+  Marks a conversation as read (owner viewed it), used for unread badges.
+  """
+  db: Session = request.db
+  tenant = db.get(Tenant, tenant_id)
+  if tenant is None:
+    return jsonify({"error": "tenant not found"}), 404
+  auth_err = maybe_require_auth(tenant_id)
+  if auth_err is not None:
+    return auth_err
+
+  now = datetime.utcnow()
+  rec = (
+    db.query(ConversationRead)
+    .filter(ConversationRead.tenant_id == tenant_id, ConversationRead.customer_id == customer_id)
+    .first()
+  )
+  if rec is None:
+    rec = ConversationRead(tenant_id=tenant_id, customer_id=customer_id, last_read_at=now, updated_at=now)
+    db.add(rec)
+  else:
+    rec.last_read_at = now
+    rec.updated_at = now
+    db.add(rec)
+  return jsonify({"ok": True, "last_read_at": now.isoformat()}), 200
 
 
 @app.route("/messages/<int:message_id>", methods=["DELETE"])

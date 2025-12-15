@@ -24,10 +24,6 @@ export default function PersonalizationManager({ tenantId }: { tenantId: number 
   const [preferences, setPreferences] = useState<any>({})
   const [saving, setSaving] = useState(false)
 
-  useEffect(() => {
-    loadData()
-  }, [loadData])
-
   const loadData = useCallback(async () => {
     try {
       const personalizationData = await api.getPersonalization(tenantId)
@@ -38,6 +34,10 @@ export default function PersonalizationManager({ tenantId }: { tenantId: number 
       setLoading(false)
     }
   }, [tenantId])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   const savePreferences = async () => {
     if (!selectedCustomer) return

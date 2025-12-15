@@ -206,11 +206,17 @@ export default function OnboardingPage() {
       field === 'tagline'
         ? profile.tagline || ''
         : profile.refunds?.refund_policy || ''
-    if (!raw.trim()) return
+    if (!raw.trim()) {
+      alert('Please enter some text first before polishing.')
+      return
+    }
     try {
       const res = await api.polishText(tenantId, field, raw)
       const suggested = String(res?.suggested_text || '').trim()
-      if (!suggested) return
+      if (!suggested) {
+        alert('No suggestions available. The AI service might not be configured with a GROQ API key.')
+        return
+      }
       if (!confirm(`Apply this improved text?\n\n${suggested}`)) return
       if (field === 'tagline') {
         setProfile((prev) => ({ ...prev, tagline: suggested }))
@@ -220,8 +226,9 @@ export default function OnboardingPage() {
           refunds: { ...(prev.refunds || {}), refund_policy: suggested },
         }))
       }
-    } catch {
-      // ignore
+    } catch (error) {
+      console.error('Polish error:', error)
+      alert('Polish feature is not available. Please add your GROQ API key to services/api/.env file.')
     }
   }
 

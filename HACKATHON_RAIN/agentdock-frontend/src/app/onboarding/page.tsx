@@ -20,7 +20,7 @@ const inputBase =
 const labelBase = 'text-xs font-semibold text-slate-700 dark:text-slate-200'
 
 function mergeProfile(prev: BusinessProfile, patch: Partial<BusinessProfile>) {
-  return {
+  const next = {
     ...prev,
     ...patch,
     opening_hours: {
@@ -37,8 +37,17 @@ function mergeProfile(prev: BusinessProfile, patch: Partial<BusinessProfile>) {
       ...(prev.voice_and_language || {}),
       ...(patch.voice_and_language || {}),
     },
-    services: patch.services ? (patch.services as any) : prev.services,
   } as BusinessProfile
+
+  // Always use the services from the patch if provided, otherwise keep existing
+  const prevServices = Array.isArray(prev.services) ? prev.services : []
+  if (Array.isArray((patch as any).services)) {
+    ;(next as any).services = (patch as any).services
+  } else {
+    ;(next as any).services = prevServices
+  }
+
+  return next
 }
 
 export default function OnboardingPage() {
@@ -695,7 +704,7 @@ export default function OnboardingPage() {
                       <div className="sm:col-span-2">
                         <label className={labelBase}>Refund / cancellation policy</label>
                         <div className="flex gap-2">
-                          <input
+                          <textarea
                             value={profile.refunds?.refund_policy || ''}
                             onChange={(e) =>
                               setProfile((prev) => ({
@@ -706,6 +715,7 @@ export default function OnboardingPage() {
                                 },
                               }))
                             }
+                            rows={3}
                             className={inputBase}
                             placeholder="Explain cancellations, refunds, reschedules…"
                           />

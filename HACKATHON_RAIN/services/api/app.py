@@ -8,6 +8,8 @@ from datetime import datetime
 from datetime import timezone, timedelta
 from typing import Any, Dict, Optional, Callable, List
 from xml.sax.saxutils import escape as xml_escape
+from collections import defaultdict
+import time
 
 import json
 import requests
@@ -659,6 +661,11 @@ def ensure_business_code(db: Session, tenant: Tenant) -> str:
 app = Flask(__name__)
 app.secret_key = AUTH_SECRET
 
+# Rate limiting for jailbreak attempts
+_JAILBREAK_ATTEMPTS = defaultdict(list)
+_MAX_JAILBREAK_ATTEMPTS = 5
+_JAILBREAK_WINDOW_MINUTES = 10
+
 # In-memory tenant event stream for SSE (demo-friendly; resets on restart).
 _EVENTS: Dict[int, list[dict]] = {}
 _EVENT_ID = 0
@@ -814,6 +821,47 @@ def get_customer_personalization_context(customer_state: dict, business_profile:
   return " ".join(context_parts) if context_parts else ""
 
 
+def is_rate_limited(identifier: str) -> bool:
+  """Check if identifier is rate limited for jailbreak attempts."""
+  now = time.time()
+  window_start = now - (_JAILBREAK_WINDOW_MINUTES * 60)
+  
+  # Clean old attempts
+  _JAILBREAK_ATTEMPTS[identifier] = [
+    attempt_time for attempt_time in _JAILBREAK_ATTEMPTS[identifier]
+    if attempt_time > window_start
+  ]
+  
+  return len(_JAILBREAK_ATTEMPTS[identifier]) >= _MAX_JAILBREAK_ATTEMPTS
+
+
+def record_jailbreak_attempt(identifier: str):
+  """Record a jailbreak attempt for rate limiting."""
+  _JAILBREAK_ATTEMPTS[identifier].append(time.time())
+
+
+def detect_jailbreak_attempt(text: str) -> bool:
+  """Detect jailbreaking attempts in user input."""
+  text_lower = text.lower()
+  jailbreak_patterns = [
+    'ignore previous instructions', 'ignore all previous', 'forget your instructions',
+    'act as', 'pretend you are', 'roleplay as', 'you are now', 'from now on',
+    'system prompt', 'show me your prompt', 'what are your instructions',
+    'developer mode', 'jailbreak', 'break character', 'override', 'sudo',
+    'admin mode', 'debug mode', 'tell me how you work', 'what model are you',
+    'backend system', 'internal workings', 'prompt injection', 'bypass'
+  ]
+  return any(pattern in text_lower for pattern in jailbreak_patterns)
+
+
+def filter_ai_response(response: str) -> str:
+  """Filter AI response to prevent system info leakage."""
+  leak_patterns = ['system:', 'assistant:', 'role:', 'prompt:', 'agentdock', 'groq', 'llama']
+  if any(pattern.lower() in response.lower() for pattern in leak_patterns):
+    return "I'm here to help with our business services. What can I assist you with today?"
+  return response
+
+
 def _embedded_ai_generate(payload: Dict[str, Any]) -> Dict[str, Any]:
   """
   Embedded AI generator (Groq) used when deploying a single backend.
@@ -821,6 +869,18 @@ def _embedded_ai_generate(payload: Dict[str, Any]) -> Dict[str, Any]:
   """
   tenant_id = payload.get("tenant_id")
   user_message = (payload.get("message") or "").strip()
+  
+  # Anti-jailbreak protection
+  if detect_jailbreak_attempt(user_message):
+    business_name = "our business"
+    if isinstance(business_profile, dict) and business_profile.get("name"):
+      business_name = business_profile["name"]
+    
+    return {
+      "reply_text": f"I'm here to help with {business_name} services and bookings only. How can I assist you with our services today?",
+      "actions": [],
+      "meta": {"model_used": LLAMA_MODEL, "jailbreak_blocked": True}
+    }
   business_profile = payload.get("business_profile")
   history_text = payload.get("history")
   current_date = payload.get("current_date")
@@ -976,7 +1036,7 @@ def _embedded_ai_generate(payload: Dict[str, Any]) -> Dict[str, Any]:
         except Exception:
           continue
     else:
-      reply_text = raw.strip()
+      reply_text = filter_ai_response(raw.strip())
   except Exception as exc:
     debug["error_type"] = "ai_error"
     msg = str(exc)
@@ -992,7 +1052,7 @@ def _embedded_ai_generate(payload: Dict[str, Any]) -> Dict[str, Any]:
         debug["model_used"] = LLAMA_FALLBACK_MODEL
         raw, key_idx = _groq_chat_completion(messages, LLAMA_FALLBACK_MODEL, temperature=0.6, max_tokens=512)
         debug["groq_key_index"] = key_idx
-        reply_text = raw.strip()
+        reply_text = filter_ai_response(raw.strip())
         debug["error_type"] = "fallback_model"
       except Exception:
         reply_text = (
@@ -2885,6 +2945,16 @@ def handle_incoming_message(
   """
   tenant_id = tenant.id
   customer_phone_raw = normalize_phone(customer_phone_raw)
+  
+  # Rate limiting check
+  rate_limit_key = f"{tenant.id}:{customer_phone_raw or 'anonymous'}"
+  if is_rate_limited(rate_limit_key):
+    return "You've made too many unusual requests. Please try again later or contact us directly."
+  
+  # Jailbreak detection
+  if detect_jailbreak_attempt(message_text):
+    record_jailbreak_attempt(rate_limit_key)
+    return f"I'm here to help with {tenant.name} services and bookings only. How can I assist you with our services today?"
 
   customer = None
   if customer_phone_raw:
@@ -3035,7 +3105,7 @@ def handle_incoming_message(
         customer_state.updated_at = datetime.utcnow()
         db.add(customer_state)
         data2 = call_ai(tool_results=tool_results)
-        reply_text = data2.get("reply_text", reply_text)
+        reply_text = filter_ai_response(data2.get("reply_text", reply_text))
         if isinstance(data2.get("meta"), dict) and not meta:
           meta = data2.get("meta")  # type: ignore[assignment]
 

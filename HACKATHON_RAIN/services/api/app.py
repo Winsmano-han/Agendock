@@ -1287,7 +1287,9 @@ def upload_image() -> tuple:
   path = os.path.join(UPLOAD_DIR, filename)
   file.save(path)
 
-  url = f"/uploads/{filename}"
+  # Return full API URL so frontend can access from different domain
+  base_url = request.host_url.rstrip('/')
+  url = f"{base_url}/uploads/{filename}"
   return jsonify({"url": url}), 201
 
 

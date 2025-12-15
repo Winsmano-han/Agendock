@@ -1,0 +1,100 @@
+{
+  "name": "HealthCare Plus Clinic",
+  "business_type": "clinic",
+  "tagline": "Your health, our priority - quality care for everyone",
+  "location": "Ikeja GRA, Lagos",
+  "contact_phone": "+234 903 000 0000",
+  "whatsapp_number": "+234 903 000 0000",
+  "owner_whatsapp": "+234 903 000 0001",
+  "website": "www.healthcareplus.ng",
+  "time_zone": "Africa/Lagos",
+  "opening_hours": {
+    "monday": "08:00-17:00",
+    "tuesday": "08:00-17:00",
+    "wednesday": "08:00-17:00",
+    "thursday": "08:00-17:00",
+    "friday": "08:00-17:00",
+    "saturday": "09:00-14:00",
+    "sunday": "closed"
+  },
+  "services": [
+    {
+      "id": "CONSULT1",
+      "name": "General Consultation",
+      "description": "Comprehensive health check-up with our experienced doctors",
+      "duration_minutes": 30,
+      "price": 8000,
+      "category": "Consultation"
+    },
+    {
+      "id": "LAB1",
+      "name": "Laboratory Tests",
+      "description": "Complete blood work and diagnostic testing",
+      "duration_minutes": 15,
+      "price": 12000,
+      "category": "Diagnostics"
+    },
+    {
+      "id": "VACCINE1",
+      "name": "Vaccination",
+      "description": "Immunization services for children and adults",
+      "duration_minutes": 20,
+      "price": 5000,
+      "category": "Preventive"
+    },
+    {
+      "id": "CHECKUP1",
+      "name": "Annual Health Screening",
+      "description": "Comprehensive yearly health assessment",
+      "duration_minutes": 60,
+      "price": 25000,
+      "category": "Preventive"
+    }
+  ],
+  "booking_rules": {
+    "booking_types": ["appointment", "walk_in"],
+    "max_days_in_advance": 60,
+    "buffer_minutes": 10,
+    "required_fields": ["full_name", "phone", "date", "time", "service", "age"],
+    "late_policy": "Please arrive 15 minutes early for registration. Late arrivals may need to reschedule.",
+    "no_show_policy": "Missed appointments without 24-hour notice may incur a fee."
+  },
+  "payments": {
+    "currency": "NGN",
+    "methods": ["cash", "transfer", "POS", "card", "insurance"],
+    "deposit_required": false
+  },
+  "refunds": {
+    "cancellation_window_hours": 24,
+    "refund_policy": "Appointments can be cancelled or rescheduled with 24-hour notice. Emergency cancellations are understood.",
+    "quality_policy": "We are committed to providing excellent healthcare. Any concerns will be addressed promptly and professionally."
+  },
+  "voice_and_language": {
+    "tone": "professional",
+    "use_slang": false,
+    "languages": ["en"],
+    "avoid": ["casual", "unprofessional"],
+    "personality_traits": ["caring", "professional", "health-focused", "empathetic"]
+  },
+  "notifications": {
+    "whatsapp_alerts": true,
+    "email_alerts": true,
+    "alert_types": ["new_appointment", "cancellations", "urgent_matters"]
+  },
+  "social": {
+    "instagram": "@healthcareplus_ng",
+    "facebook": "HealthCare Plus Clinic Lagos",
+    "tiktok": null,
+    "hashtags": ["#HealthCarePlus", "#LagosHealth", "#QualityCare", "#YourHealthMatters"],
+    "needs_photo_consent": true,
+    "auto_generate_content": true,
+    "content_schedule": "weekly"
+  },
+  "ai_features": {
+    "sentiment_analysis": true,
+    "smart_scheduling": true,
+    "personalization": true,
+    "multi_language": true,
+    "social_content_generation": true
+  }
+}

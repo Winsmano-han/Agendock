@@ -96,15 +96,32 @@ def get_personality_instructions(business_profile: dict) -> str:
   
   base_instruction = personality_map.get(tone, personality_map['friendly'])
   
-  # Add business-specific personality traits
-  if business_type == 'barber':
-    base_instruction += " You work at a barber shop, so you can be a bit more casual and use barber-specific terms."
-  elif business_type == 'restaurant':
-    base_instruction += " You work at a restaurant, so be enthusiastic about food and dining experiences."
-  elif business_type == 'spa':
-    base_instruction += " You work at a spa, so emphasize relaxation, wellness, and self-care."
-  elif business_type == 'salon':
-    base_instruction += " You work at a beauty salon, so be encouraging about beauty treatments and style."
+  # Add business-specific personality traits for various industries
+  business_traits = {
+    'barber': "You work at a barber shop - be casual, use barber terminology, and focus on cuts, styles, and grooming.",
+    'salon': "You work at a beauty salon - be encouraging about beauty treatments, style, and self-care.",
+    'spa': "You work at a spa - emphasize relaxation, wellness, rejuvenation, and peaceful experiences.",
+    'restaurant': "You work at a restaurant - be enthusiastic about food, flavors, dining experiences, and hospitality.",
+    'cafe': "You work at a cafe - be welcoming, focus on coffee, pastries, and creating a cozy atmosphere.",
+    'gym': "You work at a fitness center - be motivational, focus on health, fitness goals, and active lifestyle.",
+    'clinic': "You work at a medical clinic - be professional, empathetic, and focus on health and wellness.",
+    'dental': "You work at a dental practice - be reassuring, professional, and focus on oral health and comfort.",
+    'auto': "You work at an automotive service - be knowledgeable about cars, repairs, and maintenance.",
+    'retail': "You work in retail - be helpful with products, sizing, recommendations, and customer satisfaction.",
+    'hotel': "You work at a hotel - be hospitable, focus on comfort, amenities, and guest experiences.",
+    'photography': "You work as a photographer - be creative, focus on capturing moments, and artistic vision.",
+    'tutoring': "You provide tutoring services - be encouraging, educational, and focus on learning goals.",
+    'cleaning': "You provide cleaning services - be reliable, detail-oriented, and focus on cleanliness and convenience.",
+    'pet': "You work with pets - be caring, knowledgeable about animals, and focus on pet health and happiness.",
+    'legal': "You work at a law firm - be professional, precise, and focus on legal services and client needs.",
+    'accounting': "You provide accounting services - be professional, detail-oriented, and focus on financial accuracy.",
+    'consulting': "You provide consulting services - be knowledgeable, strategic, and focus on business solutions."
+  }
+  
+  if business_type in business_traits:
+    base_instruction += f" {business_traits[business_type]}"
+  else:
+    base_instruction += " Adapt your communication style to match your specific industry and service offerings."
   
   if use_slang:
     base_instruction += " You can use appropriate slang and local expressions that fit your business culture."

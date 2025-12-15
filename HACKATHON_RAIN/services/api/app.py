@@ -3926,10 +3926,11 @@ def generate_social_content(tenant_id: int) -> tuple:
   try:
     if USE_EMBEDDED_AI or GROQ_API_KEY:
       system_prompt = (
-        "You are a social media marketing expert that creates engaging promotional content for small businesses. "
+        "You are a social media marketing expert that creates engaging promotional content for ANY type of small business. "
         "You must respond ONLY with a JSON object containing 'content' (the main post text) and 'hashtags' (relevant hashtags). "
-        "Make content platform-appropriate, engaging, and authentic. Include emojis where suitable. "
-        "Keep content concise and action-oriented."
+        "Make content platform-appropriate, engaging, and authentic for the specific business type. Include relevant emojis. "
+        "Adapt your language and focus to match the industry - professional for medical/legal, warm for hospitality, energetic for fitness, etc. "
+        "Keep content concise and action-oriented with clear calls-to-action."
       )
       
       profile_snippet = json.dumps(business_profile, ensure_ascii=False)

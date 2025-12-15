@@ -1,0 +1,100 @@
+{
+  "name": "Serenity Wellness Spa",
+  "business_type": "spa",
+  "tagline": "Relax, rejuvenate, and restore your inner peace",
+  "location": "Lekki Phase 1, Lagos",
+  "contact_phone": "+234 902 000 0000",
+  "whatsapp_number": "+234 902 000 0000",
+  "owner_whatsapp": "+234 902 000 0001",
+  "website": "www.serenityspa.ng",
+  "time_zone": "Africa/Lagos",
+  "opening_hours": {
+    "monday": "09:00-19:00",
+    "tuesday": "09:00-19:00",
+    "wednesday": "09:00-19:00", 
+    "thursday": "09:00-19:00",
+    "friday": "09:00-20:00",
+    "saturday": "08:00-20:00",
+    "sunday": "10:00-18:00"
+  },
+  "services": [
+    {
+      "id": "MASSAGE1",
+      "name": "Swedish Massage",
+      "description": "Full body relaxation massage to relieve stress and tension",
+      "duration_minutes": 60,
+      "price": 15000,
+      "category": "Massage"
+    },
+    {
+      "id": "FACIAL1",
+      "name": "Deep Cleansing Facial",
+      "description": "Purifying facial treatment for glowing, healthy skin",
+      "duration_minutes": 75,
+      "price": 12000,
+      "category": "Skincare"
+    },
+    {
+      "id": "MANI1",
+      "name": "Luxury Manicure",
+      "description": "Complete nail care with premium polish and hand treatment",
+      "duration_minutes": 45,
+      "price": 8000,
+      "category": "Nails"
+    },
+    {
+      "id": "PEDI1",
+      "name": "Spa Pedicure",
+      "description": "Relaxing foot treatment with exfoliation and massage",
+      "duration_minutes": 60,
+      "price": 10000,
+      "category": "Nails"
+    }
+  ],
+  "booking_rules": {
+    "booking_types": ["appointment"],
+    "max_days_in_advance": 30,
+    "buffer_minutes": 15,
+    "required_fields": ["full_name", "phone", "date", "time", "service"],
+    "late_policy": "Please arrive 10 minutes early. Late arrivals may result in shortened treatment time.",
+    "no_show_policy": "48-hour cancellation policy. No-shows will be charged 50% of service cost."
+  },
+  "payments": {
+    "currency": "NGN",
+    "methods": ["cash", "transfer", "POS", "card"],
+    "deposit_required": true
+  },
+  "refunds": {
+    "cancellation_window_hours": 48,
+    "refund_policy": "Cancellations must be made 48 hours in advance for full refund. Deposits are transferable to future appointments.",
+    "quality_policy": "Your satisfaction is our priority. If you're not completely relaxed and satisfied, we'll make it right."
+  },
+  "voice_and_language": {
+    "tone": "luxury",
+    "use_slang": false,
+    "languages": ["en"],
+    "avoid": ["rushed", "loud"],
+    "personality_traits": ["calming", "sophisticated", "wellness-focused"]
+  },
+  "notifications": {
+    "whatsapp_alerts": true,
+    "email_alerts": true,
+    "alert_types": ["new_booking", "cancellations", "complaints"]
+  },
+  "social": {
+    "instagram": "@serenityspa_lagos",
+    "facebook": "Serenity Wellness Spa",
+    "tiktok": "@serenityspa",
+    "hashtags": ["#SerenitySpa", "#WellnessLagos", "#SelfCare", "#Relaxation"],
+    "needs_photo_consent": true,
+    "auto_generate_content": true,
+    "content_schedule": "weekly"
+  },
+  "ai_features": {
+    "sentiment_analysis": true,
+    "smart_scheduling": true,
+    "personalization": true,
+    "multi_language": true,
+    "social_content_generation": true
+  }
+}

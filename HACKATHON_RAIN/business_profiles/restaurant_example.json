@@ -1,70 +1,92 @@
 {
-  "name": "TasteHub Kitchen",
+  "name": "Mama's Kitchen",
   "business_type": "restaurant",
-  "tagline": "Fresh meals, fast delivery.",
-  "location": "Lekki, Lagos",
-  "contact_phone": "+234 800 111 2222",
-  "whatsapp_number": "+234 800 111 2222",
+  "tagline": "Authentic home-style cooking with love",
+  "location": "Victoria Island, Lagos",
+  "contact_phone": "+234 901 000 0000",
+  "whatsapp_number": "+234 901 000 0000",
+  "owner_whatsapp": "+234 901 000 0001",
   "website": null,
   "time_zone": "Africa/Lagos",
   "opening_hours": {
-    "monday": "10:00-20:00",
-    "tuesday": "10:00-20:00",
-    "wednesday": "10:00-20:00",
-    "thursday": "10:00-20:00",
-    "friday": "10:00-21:00",
-    "saturday": "11:00-21:00",
-    "sunday": "12:00-18:00"
+    "monday": "11:00-22:00",
+    "tuesday": "11:00-22:00", 
+    "wednesday": "11:00-22:00",
+    "thursday": "11:00-22:00",
+    "friday": "11:00-23:00",
+    "saturday": "10:00-23:00",
+    "sunday": "12:00-21:00"
   },
   "services": [
     {
-      "id": "MENU1",
-      "name": "Jollof rice + chicken",
-      "description": "Smoky jollof rice with grilled chicken.",
-      "duration_minutes": null,
-      "price": 4500,
-      "category": "Meals"
+      "id": "DINE1",
+      "name": "Dine-in",
+      "description": "Enjoy our meals in our cozy restaurant atmosphere",
+      "duration_minutes": 60,
+      "price": 0,
+      "category": "Dining"
     },
     {
-      "id": "MENU2",
-      "name": "Ofada rice + stew",
-      "description": "Ofada rice served with ayamase stew.",
-      "duration_minutes": null,
-      "price": 5500,
-      "category": "Meals"
+      "id": "TAKEOUT1", 
+      "name": "Takeout",
+      "description": "Order ahead and pick up your favorite meals",
+      "duration_minutes": 15,
+      "price": 0,
+      "category": "Dining"
     },
     {
-      "id": "MENU3",
-      "name": "Small chops tray",
-      "description": "Spring rolls, puff-puff, samosa, and more.",
-      "duration_minutes": null,
-      "price": 8000,
-      "category": "Snacks"
+      "id": "DELIVERY1",
+      "name": "Home Delivery",
+      "description": "We deliver hot, fresh meals to your doorstep",
+      "duration_minutes": 45,
+      "price": 500,
+      "category": "Delivery"
     }
   ],
   "booking_rules": {
-    "booking_types": ["delivery", "pickup", "dine_in"],
-    "max_days_in_advance": 2,
-    "buffer_minutes": 0,
-    "required_fields": ["full_name", "phone"],
-    "late_policy": "Pickup orders are held for 15 minutes after the agreed time.",
-    "no_show_policy": "For large orders we may request a deposit."
+    "booking_types": ["reservation", "walk_in", "takeout", "delivery"],
+    "max_days_in_advance": 14,
+    "buffer_minutes": 15,
+    "required_fields": ["full_name", "phone", "party_size", "time"],
+    "late_policy": "Reservations held for 15 minutes past booking time",
+    "no_show_policy": "Repeated no-shows may require advance payment"
   },
   "payments": {
     "currency": "NGN",
-    "methods": ["transfer", "POS"],
+    "methods": ["cash", "transfer", "POS", "card"],
     "deposit_required": false
   },
   "refunds": {
-    "cancellation_window_hours": 1,
-    "refund_policy": "If an order has not been prepared, it can be cancelled within 1 hour.",
-    "quality_policy": "If anything is wrong with your order, let us know within 30 minutes for a replacement."
+    "cancellation_window_hours": 2,
+    "refund_policy": "Reservations can be cancelled up to 2 hours before. Food orders can be cancelled within 10 minutes of ordering.",
+    "quality_policy": "If you're not satisfied with your meal, we'll remake it or provide a full refund."
   },
   "voice_and_language": {
-    "tone": "friendly_casual",
-    "use_slang": true,
-    "languages": ["en", "pcm"],
-    "avoid": []
+    "tone": "friendly",
+    "use_slang": false,
+    "languages": ["en"],
+    "avoid": [],
+    "personality_traits": ["welcoming", "food-focused", "hospitable"]
+  },
+  "notifications": {
+    "whatsapp_alerts": true,
+    "email_alerts": false,
+    "alert_types": ["new_reservation", "new_order", "complaints"]
+  },
+  "social": {
+    "instagram": "@mamaskitchen_ng",
+    "facebook": "Mama's Kitchen Lagos",
+    "tiktok": null,
+    "hashtags": ["#MamasKitchen", "#LagosFood", "#AuthenticFlavors"],
+    "needs_photo_consent": true,
+    "auto_generate_content": true,
+    "content_schedule": "daily"
+  },
+  "ai_features": {
+    "sentiment_analysis": true,
+    "smart_scheduling": true,
+    "personalization": true,
+    "multi_language": true,
+    "social_content_generation": true
   }
 }
-

@@ -222,6 +222,12 @@ export default function DashboardPage() {
                 >
                   Edit profile
                 </Link>
+                <Link
+                  href="/ai-features"
+                  className="inline-flex items-center justify-center px-3 py-2 rounded-xl text-xs sm:text-sm font-medium bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-700 hover:to-pink-700 transition-colors"
+                >
+                  🤖 AI Features
+                </Link>
                 <button
                   type="button"
                   onClick={() => setShowChat(true)}
@@ -233,6 +239,12 @@ export default function DashboardPage() {
             </div>
             <div className="flex-1" />
             <div className="flex flex-wrap items-center gap-2">
+              <Link
+                href="/ai-features"
+                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-300/30 px-3 py-2 text-xs font-medium hover:from-purple-500/30 hover:to-pink-500/30 transition-colors"
+              >
+                🤖 AI Features
+              </Link>
               <button
                 type="button"
                 onClick={async () => {

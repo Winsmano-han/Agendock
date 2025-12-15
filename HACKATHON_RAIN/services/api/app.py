@@ -781,6 +781,39 @@ def _strip_code_fences(text: str) -> str:
   return clean
 
 
+def get_customer_personalization_context(customer_state: dict, business_profile: dict) -> str:
+  """
+  Generate personalization context based on customer preferences and history.
+  """
+  if not isinstance(customer_state, dict):
+    return ""
+  
+  preferences = customer_state.get("preferences", {})
+  mode = customer_state.get("mode", "idle")
+  
+  context_parts = []
+  
+  # Communication style preferences
+  comm_style = preferences.get("communication_style")
+  if comm_style == "professional":
+    context_parts.append("This customer prefers professional, formal communication.")
+  elif comm_style == "brief":
+    context_parts.append("This customer prefers brief, direct responses. Keep answers concise.")
+  elif comm_style == "friendly":
+    context_parts.append("This customer enjoys friendly, casual conversation.")
+  
+  # VIP treatment
+  if preferences.get("vip_treatment"):
+    context_parts.append("This is a VIP customer - provide priority treatment and mention exclusive benefits when relevant.")
+  
+  # Special notes
+  notes = preferences.get("notes")
+  if notes:
+    context_parts.append(f"Special customer notes: {notes}")
+  
+  return " ".join(context_parts) if context_parts else ""
+
+
 def _embedded_ai_generate(payload: Dict[str, Any]) -> Dict[str, Any]:
   """
   Embedded AI generator (Groq) used when deploying a single backend.
@@ -860,6 +893,7 @@ def _embedded_ai_generate(payload: Dict[str, Any]) -> Dict[str, Any]:
     )
 
   if isinstance(customer_state, dict) and customer_state:
+    # Add customer state for continuity
     messages.append(
       {
         "role": "system",
@@ -869,6 +903,19 @@ def _embedded_ai_generate(payload: Dict[str, Any]) -> Dict[str, Any]:
         ),
       }
     )
+    
+    # Add personalization context
+    personalization_context = get_customer_personalization_context(customer_state, business_profile or {})
+    if personalization_context:
+      messages.append(
+        {
+          "role": "system",
+          "content": (
+            "Customer personalization context (adapt your communication style accordingly):\n\n"
+            f"{personalization_context}"
+          ),
+        }
+      )
 
   if history_text:
     messages.append(

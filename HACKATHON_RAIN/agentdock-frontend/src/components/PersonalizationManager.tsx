@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { api } from '@/utils/api'
 
 interface CustomerProfile {
@@ -26,9 +26,9 @@ export default function PersonalizationManager({ tenantId }: { tenantId: number 
 
   useEffect(() => {
     loadData()
-  }, [tenantId])
+  }, [loadData])
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const personalizationData = await api.getPersonalization(tenantId)
       setData(personalizationData)
@@ -37,7 +37,7 @@ export default function PersonalizationManager({ tenantId }: { tenantId: number 
     } finally {
       setLoading(false)
     }
-  }
+  }, [tenantId])
 
   const savePreferences = async () => {
     if (!selectedCustomer) return

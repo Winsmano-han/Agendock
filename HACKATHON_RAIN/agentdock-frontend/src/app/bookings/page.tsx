@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { api, BusinessProfile } from '@/utils/api'
 import { useTenant } from '@/hooks/useTenant'
@@ -40,7 +40,7 @@ export default function BookingsPage() {
     setServicesMap(map)
   }
 
-  const loadInitial = async (tid: number) => {
+  const loadInitial = useCallback(async (tid: number) => {
     const [apptData, profileData, servicesData] = await Promise.all([
       api.getAppointments(tid),
       api.getBusinessProfile(tid),
@@ -51,9 +51,9 @@ export default function BookingsPage() {
     setAppointments(apptData || [])
     setProfile(profileData || null)
     loadServices(servicesData)
-  }
+  }, [])
 
-  const refreshAppointments = async (tid: number) => {
+  const refreshAppointments = useCallback(async (tid: number) => {
     try {
       const [apptData, servicesData] = await Promise.all([
         api.getAppointments(tid),
@@ -66,7 +66,7 @@ export default function BookingsPage() {
     } catch (err) {
       console.error('Failed to refresh appointments', err)
     }
-  }
+  }, [])
 
   useEffect(() => {
     if (!mounted) return

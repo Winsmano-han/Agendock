@@ -58,7 +58,7 @@ export default function AIFeaturesPage() {
             <div className="text-2xl mb-2">🧠</div>
             <h3 className="text-lg font-semibold mb-2">Multi-Language AI</h3>
             <p className="text-blue-100 text-sm">
-              Automatically detects and responds in customer's language (Spanish, French, German, Portuguese, Italian)
+              Automatically detects and responds in customer&apos;s language (Spanish, French, German, Portuguese, Italian)
             </p>
           </div>
           

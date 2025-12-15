@@ -5,6 +5,7 @@
   "location": "Yaba, Lagos (near XYZ bustop)",
   "contact_phone": "+234 903 000 0000",
   "whatsapp_number": "+234 903 000 0000",
+  "owner_whatsapp": "+234 903 000 0001",
   "website": null,
   "time_zone": "Africa/Lagos",
   "opening_hours": {
@@ -64,14 +65,29 @@
     "tone": "friendly_casual",
     "use_slang": true,
     "languages": ["en", "pcm"],
-    "avoid": []
+    "avoid": [],
+    "personality_traits": ["casual", "local", "friendly"]
+  },
+  "notifications": {
+    "whatsapp_alerts": true,
+    "email_alerts": false,
+    "alert_types": ["new_booking", "new_order", "complaints"]
   },
   "social": {
     "instagram": "@fadesandblades_ng",
     "facebook": "Fades and Blades NG",
     "tiktok": null,
     "hashtags": ["#LagosBarber", "#FadeGameStrong"],
-    "needs_photo_consent": true
+    "needs_photo_consent": true,
+    "auto_generate_content": true,
+    "content_schedule": "weekly"
+  },
+  "ai_features": {
+    "sentiment_analysis": true,
+    "smart_scheduling": true,
+    "personalization": true,
+    "multi_language": true,
+    "social_content_generation": true
   }
 }
 

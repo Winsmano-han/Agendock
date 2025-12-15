@@ -2463,6 +2463,54 @@ def _tool_check_availability(
   return {"type": "CHECK_AVAILABILITY", "ok": True, "available": True}
 
 
+def send_whatsapp_notification_to_owner(tenant: Tenant, message: str) -> bool:
+  """
+  Send WhatsApp notification to business owner about new bookings/orders.
+  Uses Twilio API to send message to owner's WhatsApp number.
+  """
+  try:
+    # Get owner's WhatsApp number from business profile
+    owner_phone = None
+    if isinstance(tenant.business_profile, dict):
+      owner_phone = tenant.business_profile.get("owner_whatsapp") or tenant.business_profile.get("owner_phone")
+    
+    if not owner_phone:
+      return False
+    
+    # Use environment variables for Twilio credentials
+    twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
+    twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
+    twilio_from = os.getenv("TWILIO_WHATSAPP_FROM", "whatsapp:+14155238886")
+    
+    if not twilio_sid or not twilio_token:
+      return False
+    
+    # Normalize phone number
+    owner_phone = normalize_phone(owner_phone)
+    if not owner_phone.startswith("+"):
+      owner_phone = f"+{owner_phone}"
+    
+    # Send WhatsApp message via Twilio
+    url = f"https://api.twilio.com/2010-04-01/Accounts/{twilio_sid}/Messages.json"
+    data = {
+      "From": twilio_from,
+      "To": f"whatsapp:{owner_phone}",
+      "Body": message,
+    }
+    
+    response = requests.post(
+      url,
+      data=data,
+      auth=(twilio_sid, twilio_token),
+      timeout=10,
+    )
+    
+    return response.status_code < 400
+  except Exception as exc:
+    app.logger.error(f"Failed to send WhatsApp notification: {exc}")
+    return False
+
+
 def _create_appointment_from_action(
   db: Session,
   tenant_id: int,
@@ -2570,6 +2618,22 @@ def _create_appointment_from_action(
     "service_name": service.name
   })
   
+  # Send WhatsApp notification to business owner
+  try:
+    tenant = db.get(Tenant, tenant_id)
+    if tenant:
+      notification_msg = (
+        f"🔔 New Booking Alert!\n\n"
+        f"📅 Service: {service.name}\n"
+        f"👤 Customer: {canonical_name or 'N/A'}\n"
+        f"📞 Phone: {canonical_phone or 'N/A'}\n"
+        f"🕐 Time: {start_time.strftime('%Y-%m-%d at %I:%M %p')}\n\n"
+        f"View details in your AgentDock dashboard."
+      )
+      send_whatsapp_notification_to_owner(tenant, notification_msg)
+  except Exception as exc:
+    app.logger.error(f"Failed to send booking notification: {exc}")
+  
   return {"type": "CREATE_APPOINTMENT", "ok": True, "appointment_id": appointment.id}
 
 def _missing_fields_for_appointment(action: dict) -> list[str]:
@@ -2632,6 +2696,27 @@ def _create_order_from_action(
   db.add(order)
   db.flush()
   publish_event(tenant_id, "order_created", {"order_id": order.id, "customer_id": order.customer_id})
+  
+  # Send WhatsApp notification to business owner
+  try:
+    tenant = db.get(Tenant, tenant_id)
+    if tenant:
+      items_text = ", ".join([f"{item.get('name', 'Item')} (x{item.get('qty', 1)})" for item in items[:3]])
+      if len(items) > 3:
+        items_text += f" + {len(items) - 3} more items"
+      
+      notification_msg = (
+        f"🛒 New Order Alert!\n\n"
+        f"📦 Items: {items_text}\n"
+        f"👤 Customer: {customer_name or 'N/A'}\n"
+        f"📞 Phone: {customer_phone or 'N/A'}\n"
+        f"💰 Total: ${(total or 0) / 100:.2f}\n\n"
+        f"View details in your AgentDock dashboard."
+      )
+      send_whatsapp_notification_to_owner(tenant, notification_msg)
+  except Exception as exc:
+    app.logger.error(f"Failed to send order notification: {exc}")
+  
   return {
     "type": "CREATE_ORDER",
     "ok": True,
@@ -2700,6 +2785,24 @@ def _create_complaint(
   db.add(complaint)
   db.flush()
   publish_event(tenant_id, "complaint_created", {"complaint_id": complaint.id, "customer_id": complaint.customer_id})
+  
+  # Send WhatsApp notification to business owner
+  try:
+    tenant = db.get(Tenant, tenant_id)
+    if tenant:
+      notification_msg = (
+        f"⚠️ New Complaint Alert!\n\n"
+        f"📝 Details: {complaint_details[:100]}{'...' if len(complaint_details) > 100 else ''}\n"
+        f"📂 Category: {category}\n"
+        f"🔥 Priority: {priority}\n"
+        f"👤 Customer: {customer_name or 'N/A'}\n"
+        f"📞 Phone: {customer_phone or 'N/A'}\n\n"
+        f"Please address this complaint promptly in your dashboard."
+      )
+      send_whatsapp_notification_to_owner(tenant, notification_msg)
+  except Exception as exc:
+    app.logger.error(f"Failed to send complaint notification: {exc}")
+  
   return {"type": "CREATE_COMPLAINT", "ok": True, "complaint_id": complaint.id}
 
 
@@ -3747,6 +3850,117 @@ def tenant_trace(tenant_id: int) -> tuple:
   )
 
 
+@app.route("/tenants/<int:tenant_id>/generate-social-content", methods=["POST"])
+def generate_social_content(tenant_id: int) -> tuple:
+  """
+  Generate promotional social media content for the business.
+  Supports different platforms and content types.
+  """
+  db: Session = request.db
+  tenant = db.get(Tenant, tenant_id)
+  if tenant is None:
+    return jsonify({"error": "tenant not found"}), 404
+  auth_err = maybe_require_auth(tenant_id)
+  if auth_err is not None:
+    return auth_err
+
+  payload: Dict[str, Any] = request.get_json(force=True, silent=True) or {}
+  platform = payload.get("platform", "instagram")  # instagram, facebook, twitter, linkedin
+  content_type = payload.get("content_type", "promotion")  # promotion, service_highlight, testimonial, tips
+  service_focus = payload.get("service_focus", "")  # specific service to highlight
+  tone = payload.get("tone", "friendly")  # friendly, professional, casual, luxury
+
+  business_profile = load_business_profile_for_tenant(tenant) or {}
+  business_name = business_profile.get("business_name", tenant.name)
+  
+  generated_content = ""
+  hashtags = ""
+  
+  try:
+    if USE_EMBEDDED_AI or GROQ_API_KEY:
+      system_prompt = (
+        "You are a social media marketing expert that creates engaging promotional content for small businesses. "
+        "You must respond ONLY with a JSON object containing 'content' (the main post text) and 'hashtags' (relevant hashtags). "
+        "Make content platform-appropriate, engaging, and authentic. Include emojis where suitable. "
+        "Keep content concise and action-oriented."
+      )
+      
+      profile_snippet = json.dumps(business_profile, ensure_ascii=False)
+      user_content = (
+        f"Business profile: {profile_snippet}\n\n"
+        f"Platform: {platform}\n"
+        f"Content type: {content_type}\n"
+        f"Service focus: {service_focus or 'general business'}\n"
+        f"Tone: {tone}\n\n"
+        f"Generate engaging social media content for {business_name}."
+      )
+      
+      messages: List[Dict[str, str]] = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_content},
+      ]
+      
+      content, _ = _groq_chat_completion(messages, LLAMA_MODEL, temperature=0.7, max_tokens=400)
+      clean = _strip_code_fences(content)
+      
+      try:
+        data = json.loads(clean)
+        generated_content = data.get("content", "")
+        hashtags = data.get("hashtags", "")
+      except Exception:
+        # Fallback parsing
+        lines = clean.split("\n")
+        content_lines = []
+        hashtag_lines = []
+        in_hashtags = False
+        
+        for line in lines:
+          if line.strip().startswith("#") or "hashtags" in line.lower():
+            in_hashtags = True
+          if in_hashtags:
+            hashtag_lines.append(line)
+          else:
+            content_lines.append(line)
+        
+        generated_content = "\n".join(content_lines).strip()
+        hashtags = "\n".join(hashtag_lines).strip()
+      
+      return jsonify({
+        "content": generated_content,
+        "hashtags": hashtags,
+        "platform": platform,
+        "content_type": content_type
+      }), 200
+
+    # Fallback to external AI service
+    resp = requests.post(
+      f"{AI_SERVICE_URL}/generate-social-content",
+      json={
+        "business_profile": business_profile,
+        "platform": platform,
+        "content_type": content_type,
+        "service_focus": service_focus,
+        "tone": tone,
+      },
+      timeout=30,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    generated_content = data.get("content", "")
+    hashtags = data.get("hashtags", "")
+  except Exception as exc:
+    app.logger.exception("generate-social-content error: %s", exc)
+    generated_content = f"🌟 Visit {business_name} for amazing services! Book your appointment today."
+    hashtags = f"#{business_name.replace(' ', '')} #BookNow #LocalBusiness"
+
+  return jsonify({
+    "content": generated_content,
+    "hashtags": hashtags,
+    "platform": platform,
+    "content_type": content_type
+  }), 200
+
+
 @app.route("/setup-assistant", methods=["POST"])
 def setup_assistant() -> tuple:
   """
@@ -3880,6 +4094,175 @@ def setup_assistant() -> tuple:
   ), 200
 
 
+@app.route("/tenants/<int:tenant_id>/analytics", methods=["GET"])
+def tenant_analytics(tenant_id: int) -> tuple:
+  """
+  Advanced analytics dashboard with business intelligence insights.
+  """
+  db: Session = request.db
+  tenant = db.get(Tenant, tenant_id)
+  if tenant is None:
+    return jsonify({"error": "tenant not found"}), 404
+  auth_err = maybe_require_auth(tenant_id)
+  if auth_err is not None:
+    return auth_err
+
+  from sqlalchemy import func, extract
+  
+  # Peak hours analysis
+  peak_hours = (
+    db.query(
+      extract('hour', Appointment.start_time).label('hour'),
+      func.count(Appointment.id).label('count')
+    )
+    .filter(Appointment.tenant_id == tenant_id, Appointment.status != 'cancelled')
+    .group_by(extract('hour', Appointment.start_time))
+    .order_by('count DESC')
+    .limit(5)
+    .all()
+  )
+  
+  # Popular services
+  popular_services = (
+    db.query(
+      Service.name,
+      func.count(Appointment.id).label('bookings')
+    )
+    .join(Appointment, Service.id == Appointment.service_id)
+    .filter(Service.tenant_id == tenant_id, Appointment.status != 'cancelled')
+    .group_by(Service.name)
+    .order_by('bookings DESC')
+    .limit(5)
+    .all()
+  )
+  
+  # Customer retention (repeat customers)
+  repeat_customers = (
+    db.query(func.count(func.distinct(Appointment.customer_phone)))
+    .filter(
+      Appointment.tenant_id == tenant_id,
+      Appointment.customer_phone.isnot(None),
+      Appointment.status != 'cancelled'
+    )
+    .having(func.count(Appointment.id) > 1)
+    .scalar() or 0
+  )
+  
+  # Revenue trends (last 30 days)
+  thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+  recent_revenue = (
+    db.query(func.sum(Order.total_amount))
+    .filter(
+      Order.tenant_id == tenant_id,
+      Order.created_at >= thirty_days_ago,
+      Order.status.in_(['confirmed', 'fulfilled'])
+    )
+    .scalar() or 0
+  )
+  
+  return jsonify({
+    "peak_hours": [{
+      "hour": f"{int(hour):02d}:00",
+      "bookings": int(count)
+    } for hour, count in peak_hours],
+    "popular_services": [{
+      "service": name,
+      "bookings": int(bookings)
+    } for name, bookings in popular_services],
+    "repeat_customers": int(repeat_customers),
+    "revenue_30_days": float(recent_revenue / 100) if recent_revenue else 0.0,
+    "insights": [
+      f"Your busiest hour is {peak_hours[0][0]:02.0f}:00" if peak_hours else "No peak hours data yet",
+      f"Most popular service: {popular_services[0][0]}" if popular_services else "No service data yet",
+      f"You have {repeat_customers} repeat customers" if repeat_customers > 0 else "Focus on customer retention"
+    ]
+  }), 200
+
+
+@app.route("/tenants/<int:tenant_id>/sentiment-analysis", methods=["GET"])
+def sentiment_analysis(tenant_id: int) -> tuple:
+  """
+  Analyze customer sentiment from recent conversations.
+  """
+  db: Session = request.db
+  tenant = db.get(Tenant, tenant_id)
+  if tenant is None:
+    return jsonify({"error": "tenant not found"}), 404
+  auth_err = maybe_require_auth(tenant_id)
+  if auth_err is not None:
+    return auth_err
+
+  # Get recent customer messages
+  recent_messages = (
+    db.query(Message)
+    .filter(
+      Message.tenant_id == tenant_id,
+      Message.direction == "in",
+      Message.created_at >= datetime.utcnow() - timedelta(days=7)
+    )
+    .order_by(Message.created_at.desc())
+    .limit(100)
+    .all()
+  )
+  
+  if not recent_messages:
+    return jsonify({
+      "overall_sentiment": "neutral",
+      "sentiment_breakdown": {"positive": 0, "neutral": 0, "negative": 0},
+      "insights": ["No recent messages to analyze"]
+    }), 200
+  
+  # Simple sentiment analysis based on keywords
+  positive_words = ['great', 'excellent', 'amazing', 'love', 'perfect', 'wonderful', 'fantastic', 'awesome', 'thank']
+  negative_words = ['bad', 'terrible', 'awful', 'hate', 'worst', 'horrible', 'disappointed', 'angry', 'complaint']
+  
+  sentiment_scores = []
+  for msg in recent_messages:
+    text = msg.text.lower()
+    positive_count = sum(1 for word in positive_words if word in text)
+    negative_count = sum(1 for word in negative_words if word in text)
+    
+    if positive_count > negative_count:
+      sentiment_scores.append("positive")
+    elif negative_count > positive_count:
+      sentiment_scores.append("negative")
+    else:
+      sentiment_scores.append("neutral")
+  
+  # Calculate breakdown
+  positive_count = sentiment_scores.count("positive")
+  negative_count = sentiment_scores.count("negative")
+  neutral_count = sentiment_scores.count("neutral")
+  total = len(sentiment_scores)
+  
+  # Determine overall sentiment
+  if positive_count > negative_count and positive_count > neutral_count:
+    overall = "positive"
+  elif negative_count > positive_count and negative_count > neutral_count:
+    overall = "negative"
+  else:
+    overall = "neutral"
+  
+  insights = []
+  if positive_count / total > 0.6:
+    insights.append("Customers are very satisfied with your service!")
+  elif negative_count / total > 0.3:
+    insights.append("Consider addressing customer concerns to improve satisfaction")
+  else:
+    insights.append("Customer sentiment is balanced - keep up the good work")
+  
+  return jsonify({
+    "overall_sentiment": overall,
+    "sentiment_breakdown": {
+      "positive": round(positive_count / total * 100, 1),
+      "neutral": round(neutral_count / total * 100, 1),
+      "negative": round(negative_count / total * 100, 1)
+    },
+    "total_messages": total,
+    "insights": insights
+  }), 200
+
+
 @app.route("/tenants/<int:tenant_id>/dashboard", methods=["GET"])
 def tenant_dashboard(tenant_id: int):
   """
@@ -3920,6 +4303,132 @@ def tenant_dashboard(tenant_id: int):
     whatsapp_link=whatsapp_link,
     whatsapp_code=whatsapp_code,
     )
+
+
+@app.route("/tenants/<int:tenant_id>/optimization-suggestions", methods=["GET"])
+def optimization_suggestions(tenant_id: int) -> tuple:
+  """
+  AI-powered business optimization suggestions based on data patterns.
+  """
+  db: Session = request.db
+  tenant = db.get(Tenant, tenant_id)
+  if tenant is None:
+    return jsonify({"error": "tenant not found"}), 404
+  auth_err = maybe_require_auth(tenant_id)
+  if auth_err is not None:
+    return auth_err
+
+  from sqlalchemy import func, extract
+  
+  # Analyze appointment patterns
+  hourly_bookings = (
+    db.query(
+      extract('hour', Appointment.start_time).label('hour'),
+      func.count(Appointment.id).label('count')
+    )
+    .filter(Appointment.tenant_id == tenant_id, Appointment.status != 'cancelled')
+    .group_by(extract('hour', Appointment.start_time))
+    .all()
+  )
+  
+  # Find empty slots
+  business_profile = load_business_profile_for_tenant(tenant) or {}
+  opening_hours = business_profile.get('opening_hours', {})
+  
+  suggestions = []
+  
+  # Analyze booking patterns
+  if hourly_bookings:
+    booking_dict = {int(hour): count for hour, count in hourly_bookings}
+    
+    # Find consistently empty hours
+    for day, hours_str in opening_hours.items():
+      if hours_str and hours_str.lower() != 'closed':
+        try:
+          start_hour = int(hours_str.split('-')[0].split(':')[0])
+          end_hour = int(hours_str.split('-')[1].split(':')[0])
+          
+          for hour in range(start_hour, end_hour):
+            if booking_dict.get(hour, 0) == 0:
+              suggestions.append({
+                "type": "pricing",
+                "title": f"Consider promotional pricing for {hour}:00-{hour+1}:00",
+                "description": f"This time slot on {day.title()} has no bookings. Offer discounts to attract customers.",
+                "priority": "medium"
+              })
+              break  # Only suggest once per day
+        except:
+          continue
+  
+  # Service popularity analysis
+  service_bookings = (
+    db.query(
+      Service.name,
+      func.count(Appointment.id).label('bookings')
+    )
+    .join(Appointment, Service.id == Appointment.service_id)
+    .filter(Service.tenant_id == tenant_id, Appointment.status != 'cancelled')
+    .group_by(Service.name)
+    .order_by('bookings DESC')
+    .all()
+  )
+  
+  if service_bookings:
+    most_popular = service_bookings[0]
+    if len(service_bookings) > 1:
+      least_popular = service_bookings[-1]
+      if most_popular[1] > least_popular[1] * 3:  # 3x difference
+        suggestions.append({
+          "type": "service",
+          "title": f"Promote your '{least_popular[0]}' service",
+          "description": f"'{most_popular[0]}' is {most_popular[1]}x more popular. Consider bundling or promoting '{least_popular[0]}'.",
+          "priority": "high"
+        })
+  
+  # Customer retention analysis
+  repeat_rate = (
+    db.query(func.count(func.distinct(Appointment.customer_phone)))
+    .filter(
+      Appointment.tenant_id == tenant_id,
+      Appointment.customer_phone.isnot(None),
+      Appointment.status != 'cancelled'
+    )
+    .having(func.count(Appointment.id) > 1)
+    .scalar() or 0
+  )
+  
+  total_customers = (
+    db.query(func.count(func.distinct(Appointment.customer_phone)))
+    .filter(
+      Appointment.tenant_id == tenant_id,
+      Appointment.customer_phone.isnot(None),
+      Appointment.status != 'cancelled'
+    )
+    .scalar() or 1
+  )
+  
+  retention_rate = (repeat_rate / total_customers) * 100 if total_customers > 0 else 0
+  
+  if retention_rate < 30:
+    suggestions.append({
+      "type": "retention",
+      "title": "Improve customer retention",
+      "description": f"Only {retention_rate:.1f}% of customers return. Consider loyalty programs or follow-up messages.",
+      "priority": "high"
+    })
+  
+  # Default suggestions if no data
+  if not suggestions:
+    suggestions = [
+      {
+        "type": "general",
+        "title": "Collect more customer data",
+        "description": "Encourage customers to book through your AI agent to gather insights for optimization.",
+        "priority": "medium"
+      }
+    ]
+  
+  return jsonify({"suggestions": suggestions[:5]}), 200  # Limit to top 5
 
 @app.route("/tenants/<int:tenant_id>/messages", methods=["GET"])
 def tenant_messages(tenant_id: int) -> tuple:
@@ -4219,6 +4728,89 @@ def update_appointment(appointment_id: int) -> tuple:
     ),
     200,
   )
+
+
+@app.route("/tenants/<int:tenant_id>/personalization", methods=["GET", "POST"])
+def customer_personalization(tenant_id: int) -> tuple:
+  """
+  Manage customer personalization settings and preferences.
+  """
+  db: Session = request.db
+  tenant = db.get(Tenant, tenant_id)
+  if tenant is None:
+    return jsonify({"error": "tenant not found"}), 404
+  auth_err = maybe_require_auth(tenant_id)
+  if auth_err is not None:
+    return auth_err
+
+  if request.method == "GET":
+    # Get customer insights and preferences
+    customers_with_prefs = (
+      db.query(Customer, CustomerState)
+      .outerjoin(CustomerState, Customer.id == CustomerState.customer_id)
+      .filter(Customer.tenant_id == tenant_id)
+      .limit(50)
+      .all()
+    )
+    
+    customer_profiles = []
+    for customer, state in customers_with_prefs:
+      # Count appointments
+      appointment_count = (
+        db.query(func.count(Appointment.id))
+        .filter(
+          Appointment.tenant_id == tenant_id,
+          Appointment.customer_id == customer.id,
+          Appointment.status != 'cancelled'
+        )
+        .scalar() or 0
+      )
+      
+      # Get preferred services
+      preferred_services = (
+        db.query(Service.name, func.count(Appointment.id).label('count'))
+        .join(Appointment, Service.id == Appointment.service_id)
+        .filter(
+          Appointment.tenant_id == tenant_id,
+          Appointment.customer_id == customer.id,
+          Appointment.status != 'cancelled'
+        )
+        .group_by(Service.name)
+        .order_by('count DESC')
+        .limit(3)
+        .all()
+      )
+      
+      customer_profiles.append({
+        "customer_id": customer.id,
+        "name": customer.name,
+        "phone": customer.phone,
+        "total_appointments": appointment_count,
+        "preferred_services": [name for name, _ in preferred_services],
+        "customer_tier": "VIP" if appointment_count >= 5 else "Regular" if appointment_count >= 2 else "New",
+        "state": state.state if state else {}
+      })
+    
+    return jsonify({"customer_profiles": customer_profiles}), 200
+  
+  # POST: Update customer preferences
+  payload: Dict[str, Any] = request.get_json(force=True, silent=True) or {}
+  customer_id = payload.get("customer_id")
+  preferences = payload.get("preferences", {})
+  
+  if not customer_id:
+    return jsonify({"error": "customer_id is required"}), 400
+  
+  customer_state = _get_customer_state(db, tenant_id, None, "")
+  if isinstance(customer_state.state, dict):
+    customer_state.state.update({"preferences": preferences})
+  else:
+    customer_state.state = {"preferences": preferences}
+  
+  customer_state.updated_at = datetime.utcnow()
+  db.add(customer_state)
+  
+  return jsonify({"status": "updated"}), 200
 
 
 if __name__ == "__main__":

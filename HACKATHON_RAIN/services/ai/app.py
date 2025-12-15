@@ -25,12 +25,100 @@ def get_groq_client() -> Groq:
   return Groq(api_key=GROQ_API_KEY)
 
 
-def build_system_prompt(tenant_id: int | None = None) -> str:
+def detect_language(text: str) -> str:
+  """
+  Simple language detection based on common words and patterns.
+  Returns ISO language code (en, es, fr, de, etc.)
+  """
+  text_lower = text.lower()
+  
+  # Spanish indicators
+  spanish_words = ['hola', 'gracias', 'por favor', 'sí', 'no', 'cómo', 'cuándo', 'dónde', 'qué', 'precio', 'reserva']
+  if any(word in text_lower for word in spanish_words):
+    return 'es'
+  
+  # French indicators
+  french_words = ['bonjour', 'merci', 's\'il vous plaît', 'oui', 'non', 'comment', 'quand', 'où', 'que', 'prix', 'réservation']
+  if any(word in text_lower for word in french_words):
+    return 'fr'
+  
+  # German indicators
+  german_words = ['hallo', 'danke', 'bitte', 'ja', 'nein', 'wie', 'wann', 'wo', 'was', 'preis', 'reservierung']
+  if any(word in text_lower for word in german_words):
+    return 'de'
+  
+  # Portuguese indicators
+  portuguese_words = ['olá', 'obrigado', 'por favor', 'sim', 'não', 'como', 'quando', 'onde', 'que', 'preço', 'reserva']
+  if any(word in text_lower for word in portuguese_words):
+    return 'pt'
+  
+  # Italian indicators
+  italian_words = ['ciao', 'grazie', 'per favore', 'sì', 'no', 'come', 'quando', 'dove', 'che', 'prezzo', 'prenotazione']
+  if any(word in text_lower for word in italian_words):
+    return 'it'
+  
+  # Default to English
+  return 'en'
+
+
+def get_language_instructions(lang_code: str) -> str:
+  """
+  Get language-specific instructions for the AI assistant.
+  """
+  instructions = {
+    'es': "Responde SIEMPRE en español. Usa un tono cálido y profesional como si fueras parte del equipo del negocio.",
+    'fr': "Répondez TOUJOURS en français. Utilisez un ton chaleureux et professionnel comme si vous faisiez partie de l'équipe.",
+    'de': "Antworten Sie IMMER auf Deutsch. Verwenden Sie einen warmen und professionellen Ton, als wären Sie Teil des Teams.",
+    'pt': "Responda SEMPRE em português. Use um tom caloroso e profissional como se fosse parte da equipe do negócio.",
+    'it': "Rispondi SEMPRE in italiano. Usa un tono caloroso e professionale come se fossi parte del team aziendale.",
+    'en': "Always respond in English. Use a warm, professional tone as if you are part of the business team."
+  }
+  return instructions.get(lang_code, instructions['en'])
+
+
+def get_personality_instructions(business_profile: dict) -> str:
+  """
+  Generate personality instructions based on business profile voice settings.
+  """
+  voice_config = business_profile.get('voice_and_language', {})
+  tone = voice_config.get('tone', 'friendly')
+  use_slang = voice_config.get('use_slang', False)
+  business_type = business_profile.get('business_type', 'general')
+  
+  personality_map = {
+    'professional': "Maintain a formal, professional tone. Use proper grammar and avoid casual expressions.",
+    'friendly': "Be warm and approachable. Use friendly language while staying professional.",
+    'friendly_casual': "Be warm, friendly, and conversational. You can use casual expressions and be more relaxed.",
+    'luxury': "Speak with elegance and sophistication. Use refined language that reflects premium service.",
+    'casual': "Be relaxed and conversational. Use everyday language that feels natural and approachable.",
+    'energetic': "Be enthusiastic and upbeat! Use exclamation points and positive energy in your responses."
+  }
+  
+  base_instruction = personality_map.get(tone, personality_map['friendly'])
+  
+  # Add business-specific personality traits
+  if business_type == 'barber':
+    base_instruction += " You work at a barber shop, so you can be a bit more casual and use barber-specific terms."
+  elif business_type == 'restaurant':
+    base_instruction += " You work at a restaurant, so be enthusiastic about food and dining experiences."
+  elif business_type == 'spa':
+    base_instruction += " You work at a spa, so emphasize relaxation, wellness, and self-care."
+  elif business_type == 'salon':
+    base_instruction += " You work at a beauty salon, so be encouraging about beauty treatments and style."
+  
+  if use_slang:
+    base_instruction += " You can use appropriate slang and local expressions that fit your business culture."
+  
+  return base_instruction
+
+
+def build_system_prompt(tenant_id: int | None = None, business_profile: dict | None = None) -> str:
   base_prompt = (
     "You are AgentDock AI assistant for small businesses. "
     "Your ONLY job is to help with this specific business: its services, prices, opening hours, bookings, orders, and policies. "
     "You must sound like a warm, human customer-care rep for the business. Never say you are an AI, a bot, or a language model. "
     "Use 'we' or 'I' as if you are part of the business team. "
+    "CRITICAL: Always respond in the same language the customer is using. If they write in Spanish, respond in Spanish. If French, respond in French, etc. "
     "On the very first message of a conversation (when there is little or no history), greet the customer warmly, mention the business name and 2–3 key services, and invite them to ask a question or book. "
     "Respond in a clear, friendly tone, and keep replies concise and easy to scan. "
     "When listing structured information (like opening hours, services, or policies), format the answer as a short list with one item per line, "
@@ -49,6 +137,7 @@ def build_system_prompt(tenant_id: int | None = None) -> str:
     "- CREATE_ORDER: {\"type\":\"CREATE_ORDER\",\"items\":[{\"name\":\"...\",\"qty\":1}],\"customer_name\":\"...\",\"customer_phone\":\"...\"}\n"
     "- ESCALATE_TO_HUMAN: {\"type\":\"ESCALATE_TO_HUMAN\",\"reason\":\"...\"}\n"
     "- CREATE_COMPLAINT: {\"type\":\"CREATE_COMPLAINT\",\"complaint_details\":\"...\",\"category\":\"...\",\"priority\":\"...\",\"customer_name\":\"...\",\"customer_phone\":\"...\"}\n"
+    "- GENERATE_SOCIAL_CONTENT: {\"type\":\"GENERATE_SOCIAL_CONTENT\",\"platform\":\"instagram\",\"content_type\":\"promotion\",\"service_focus\":\"...\"}\n"
     "- UPDATE_PROFILE_FIELD (tool): {\"type\":\"UPDATE_PROFILE_FIELD\",\"path\":\"refunds.refund_policy\",\"value\":\"...\"}\n"
     "Example:\n"
     "ACTION_JSON:{\"type\":\"QUOTE_PRICE\",\"service_name\":\"Service A\"}\n"
@@ -94,18 +183,29 @@ def generate_reply() -> tuple:
   knowledge_chunks = payload.get("knowledge_chunks")
   tool_results = payload.get("tool_results")
   customer_state = payload.get("customer_state")
+  
+  # Detect customer's language
+  detected_language = detect_language(user_message)
+  language_instruction = get_language_instructions(detected_language)
 
   if not user_message:
     return jsonify({"error": "message is required"}), 400
 
   messages: List[Dict[str, str]] = [
-    {"role": "system", "content": build_system_prompt(tenant_id)},
+    {"role": "system", "content": build_system_prompt(tenant_id, business_profile)},
+    {"role": "system", "content": language_instruction},
   ]
+  
+  # Add personality instructions if business profile is available
+  if business_profile:
+    personality_instruction = get_personality_instructions(business_profile)
+    messages.append({"role": "system", "content": personality_instruction})
 
   if business_profile:
     profile_text = (
       "Here is the current business profile in JSON. "
       "Use this information to answer questions about services, pricing, opening hours, refunds, and booking rules. "
+      "Pay attention to the voice_and_language settings to match the business personality. "
       "Do not invent services or policies that are not present here.\n\n"
       f"{business_profile}"
     )

@@ -410,7 +410,7 @@ export default function DashboardPage() {
                 </Link>
               </div>
 
-              <div className="mt-4 grid grid-cols-2 gap-3">
+              <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <Link
                   href="/chats"
                   className="group rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-4 hover:bg-white dark:hover:bg-slate-900 transition-colors"
@@ -445,6 +445,36 @@ export default function DashboardPage() {
                   </div>
                   <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
                     View bookings →
+                  </div>
+                </Link>
+
+                <Link
+                  href="/complaints"
+                  className="group rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-4 hover:bg-white dark:hover:bg-slate-900 transition-colors"
+                >
+                  <div className="text-xs text-slate-500 dark:text-slate-400">
+                    Complaints
+                  </div>
+                  <div className="mt-1 text-2xl font-semibold text-slate-900 dark:text-white">
+                    0
+                  </div>
+                  <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+                    Manage issues →
+                  </div>
+                </Link>
+
+                <Link
+                  href="/orders"
+                  className="group rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-4 hover:bg-white dark:hover:bg-slate-900 transition-colors"
+                >
+                  <div className="text-xs text-slate-500 dark:text-slate-400">
+                    Orders
+                  </div>
+                  <div className="mt-1 text-2xl font-semibold text-slate-900 dark:text-white">
+                    0
+                  </div>
+                  <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+                    View orders →
                   </div>
                 </Link>
               </div>

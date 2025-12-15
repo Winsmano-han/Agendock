@@ -110,6 +110,24 @@ export default function Navbar() {
             Orders
           </Link>
           <Link
+            href="/bookings"
+            onClick={() => setMobileOpen(false)}
+            className={`${linkBase} ${
+              isActive('/bookings') ? 'text-blue-600 dark:text-blue-400' : ''
+            }`}
+          >
+            Bookings
+          </Link>
+          <Link
+            href="/complaints"
+            onClick={() => setMobileOpen(false)}
+            className={`${linkBase} ${
+              isActive('/complaints') ? 'text-blue-600 dark:text-blue-400' : ''
+            }`}
+          >
+            Complaints
+          </Link>
+          <Link
             href="/handoffs"
             onClick={() => setMobileOpen(false)}
             className={`${linkBase} ${

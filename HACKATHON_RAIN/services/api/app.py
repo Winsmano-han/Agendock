@@ -306,6 +306,25 @@ class AIReplyCache(Base):
   reply_text = Column(String, nullable=False)
   created_at = Column(DateTime, default=datetime.utcnow)
 
+class Complaint(Base):
+  __tablename__ = "complaints"
+
+  id = Column(Integer, primary_key=True, index=True)
+  tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+  customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True)
+  customer_name = Column(String, nullable=True)
+  customer_phone = Column(String, nullable=True)
+  complaint_details = Column(String, nullable=False)
+  category = Column(String, nullable=True)  # Service, Product Quality, Booking Issue, Delay
+  priority = Column(String, default="Medium")  # Low, Medium, High, Critical
+  status = Column(String, default="Pending")  # Pending, In-Progress, Resolved, Escalated, Reopened
+  assigned_agent = Column(String, nullable=True)
+  notes = Column(String, nullable=True)
+  created_at = Column(DateTime, default=datetime.utcnow)
+  updated_at = Column(DateTime, default=datetime.utcnow)
+  resolved_at = Column(DateTime, nullable=True)
+
+
 class AgentTrace(Base):
   __tablename__ = "agent_traces"
 
@@ -363,6 +382,21 @@ def init_db() -> None:
             ("resolution_notes", "TEXT"),
             ("resolved_at", "DATETIME"),
             ("updated_at", "DATETIME"),
+          ],
+        ),
+        (
+          "complaints",
+          [
+            ("customer_name", "TEXT"),
+            ("customer_phone", "TEXT"),
+            ("complaint_details", "TEXT"),
+            ("category", "TEXT"),
+            ("priority", "TEXT"),
+            ("status", "TEXT"),
+            ("assigned_agent", "TEXT"),
+            ("notes", "TEXT"),
+            ("updated_at", "DATETIME"),
+            ("resolved_at", "DATETIME"),
           ],
         ),
       ]:
@@ -1923,6 +1957,186 @@ def update_order(order_id: int) -> tuple:
   )
 
 
+@app.route("/tenants/<int:tenant_id>/complaints", methods=["GET", "POST"])
+def tenant_complaints(tenant_id: int) -> tuple:
+  """
+  Manage complaints for a tenant.
+  - GET: list complaints.
+  - POST: create a complaint.
+  """
+  db: Session = request.db
+  tenant = db.get(Tenant, tenant_id)
+  if tenant is None:
+    return jsonify({"error": "tenant not found"}), 404
+  auth_err = maybe_require_auth(tenant_id)
+  if auth_err is not None:
+    return auth_err
+
+  if request.method == "GET":
+    complaints = (
+      db.query(Complaint)
+      .filter(Complaint.tenant_id == tenant_id)
+      .order_by(Complaint.created_at.desc())
+      .limit(200)
+      .all()
+    )
+
+    return (
+      jsonify(
+        [
+          {
+            "id": c.id,
+            "tenant_id": c.tenant_id,
+            "customer_id": c.customer_id,
+            "customer_name": c.customer_name,
+            "customer_phone": c.customer_phone,
+            "complaint_details": c.complaint_details,
+            "category": c.category,
+            "priority": c.priority,
+            "status": c.status,
+            "assigned_agent": c.assigned_agent,
+            "notes": c.notes,
+            "created_at": c.created_at.isoformat(),
+            "updated_at": c.updated_at.isoformat() if c.updated_at else c.created_at.isoformat(),
+            "resolved_at": c.resolved_at.isoformat() if c.resolved_at else None,
+          }
+          for c in complaints
+        ]
+      ),
+      200,
+    )
+
+  # POST: create complaint
+  payload: Dict[str, Any] = request.get_json(force=True, silent=True) or {}
+  complaint_details = payload.get("complaint_details")
+  if not complaint_details:
+    return jsonify({"error": "complaint_details is required"}), 400
+
+  complaint = Complaint(
+    tenant_id=tenant_id,
+    customer_id=payload.get("customer_id"),
+    customer_name=payload.get("customer_name"),
+    customer_phone=normalize_phone(payload.get("customer_phone")) or None,
+    complaint_details=complaint_details,
+    category=payload.get("category", "General"),
+    priority=payload.get("priority", "Medium"),
+    status="Pending",
+    assigned_agent=payload.get("assigned_agent"),
+    notes=payload.get("notes"),
+  )
+  db.add(complaint)
+  db.flush()
+
+  publish_event(tenant_id, "complaint_created", {"complaint_id": complaint.id, "customer_id": complaint.customer_id})
+
+  return (
+    jsonify(
+      {
+        "id": complaint.id,
+        "tenant_id": complaint.tenant_id,
+        "customer_id": complaint.customer_id,
+        "customer_name": complaint.customer_name,
+        "customer_phone": complaint.customer_phone,
+        "complaint_details": complaint.complaint_details,
+        "category": complaint.category,
+        "priority": complaint.priority,
+        "status": complaint.status,
+        "assigned_agent": complaint.assigned_agent,
+        "notes": complaint.notes,
+        "created_at": complaint.created_at.isoformat(),
+        "updated_at": complaint.updated_at.isoformat(),
+      }
+    ),
+    201,
+  )
+
+
+@app.route("/complaints/<int:complaint_id>", methods=["PATCH"])
+def update_complaint(complaint_id: int) -> tuple:
+  """
+  Update a complaint (status, priority, assignment, notes).
+  """
+  db: Session = request.db
+  complaint = db.get(Complaint, complaint_id)
+  if complaint is None:
+    return jsonify({"error": "complaint not found"}), 404
+  auth_err = maybe_require_auth(complaint.tenant_id)
+  if auth_err is not None:
+    return auth_err
+
+  payload: Dict[str, Any] = request.get_json(force=True, silent=True) or {}
+  new_status = (payload.get("status") or "").strip()
+  new_priority = (payload.get("priority") or "").strip()
+  assigned_agent = payload.get("assigned_agent")
+  notes = payload.get("notes")
+  category = payload.get("category")
+  
+  did_change = False
+  
+  if new_status:
+    allowed = {"pending", "in-progress", "resolved", "escalated", "reopened"}
+    if new_status.lower() in allowed:
+      complaint.status = new_status.title().replace("-", "-")
+      if new_status.lower() == "resolved" and not complaint.resolved_at:
+        complaint.resolved_at = datetime.utcnow()
+      elif new_status.lower() == "reopened":
+        complaint.resolved_at = None
+      did_change = True
+
+  if new_priority:
+    allowed_priorities = {"low", "medium", "high", "critical"}
+    if new_priority.lower() in allowed_priorities:
+      complaint.priority = new_priority.title()
+      did_change = True
+
+  if assigned_agent is not None:
+    complaint.assigned_agent = (str(assigned_agent).strip() or None)
+    did_change = True
+
+  if notes is not None:
+    complaint.notes = (str(notes).strip() or None)
+    did_change = True
+
+  if category is not None:
+    complaint.category = (str(category).strip() or None)
+    did_change = True
+
+  if did_change:
+    complaint.updated_at = datetime.utcnow()
+    db.add(complaint)
+    publish_event(
+      complaint.tenant_id,
+      "complaint_updated",
+      {
+        "complaint_id": complaint.id,
+        "status": complaint.status,
+        "assigned_agent": complaint.assigned_agent,
+      },
+    )
+
+  return (
+    jsonify(
+      {
+        "id": complaint.id,
+        "tenant_id": complaint.tenant_id,
+        "customer_id": complaint.customer_id,
+        "customer_name": complaint.customer_name,
+        "customer_phone": complaint.customer_phone,
+        "complaint_details": complaint.complaint_details,
+        "category": complaint.category,
+        "priority": complaint.priority,
+        "status": complaint.status,
+        "assigned_agent": complaint.assigned_agent,
+        "notes": complaint.notes,
+        "created_at": complaint.created_at.isoformat(),
+        "updated_at": complaint.updated_at.isoformat() if complaint.updated_at else complaint.created_at.isoformat(),
+        "resolved_at": complaint.resolved_at.isoformat() if complaint.resolved_at else None,
+      }
+    ),
+    200,
+  )
+
+
 @app.route("/tenants/<int:tenant_id>/handoffs", methods=["GET"])
 def tenant_handoffs(tenant_id: int) -> tuple:
   """
@@ -2316,6 +2530,16 @@ def _create_appointment_from_action(
   )
   db.add(appointment)
   db.flush()
+  
+  # Publish event for real-time updates
+  publish_event(tenant_id, "appointment_created", {
+    "appointment_id": appointment.id, 
+    "customer_id": appointment.customer_id,
+    "customer_name": appointment.customer_name,
+    "start_time": appointment.start_time.isoformat(),
+    "service_name": service.name
+  })
+  
   return {"type": "CREATE_APPOINTMENT", "ok": True, "appointment_id": appointment.id}
 
 def _missing_fields_for_appointment(action: dict) -> list[str]:
@@ -2409,6 +2633,44 @@ def _escalate_to_human(
   db.flush()
   publish_event(tenant_id, "handoff_created", {"handoff_id": handoff.id, "customer_id": handoff.customer_id})
   return {"type": "ESCALATE_TO_HUMAN", "ok": True, "handoff_id": handoff.id}
+
+
+def _create_complaint(
+  db: Session,
+  tenant_id: int,
+  customer: Optional[Customer],
+  action: dict,
+) -> Optional[dict]:
+  complaint_details = (action.get("complaint_details") or "").strip()
+  if not complaint_details:
+    return None
+  
+  customer_name = (action.get("customer_name") or "").strip()
+  customer_phone = normalize_phone(action.get("customer_phone"))
+  category = (action.get("category") or "General").strip()
+  priority = (action.get("priority") or "Medium").strip()
+  
+  # Use customer data if available
+  if customer:
+    if not customer_name and customer.name:
+      customer_name = customer.name
+    if not customer_phone and customer.phone:
+      customer_phone = customer.phone
+  
+  complaint = Complaint(
+    tenant_id=tenant_id,
+    customer_id=customer.id if customer else None,
+    customer_name=customer_name or None,
+    customer_phone=customer_phone or None,
+    complaint_details=complaint_details,
+    category=category,
+    priority=priority,
+    status="Pending",
+  )
+  db.add(complaint)
+  db.flush()
+  publish_event(tenant_id, "complaint_created", {"complaint_id": complaint.id, "customer_id": complaint.customer_id})
+  return {"type": "CREATE_COMPLAINT", "ok": True, "complaint_id": complaint.id}
 
 
 def _update_profile_field(
@@ -2578,6 +2840,10 @@ def handle_incoming_message(
             if res:
               tool_results.append(res)
               state_json["mode"] = "handoff_open"
+          elif atype == "CREATE_COMPLAINT":
+            res = _create_complaint(db, tenant_id, customer, action)
+            if res:
+              tool_results.append(res)
           elif atype == "UPDATE_PROFILE_FIELD":
             res = _update_profile_field(db, tenant, action)
             if res:

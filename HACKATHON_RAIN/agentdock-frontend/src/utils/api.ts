@@ -405,6 +405,43 @@ export const api = {
     return { url }
   },
 
+  async getComplaints(tenantId: number) {
+    return fetchJson(`${getApiBaseUrl()}/tenants/${tenantId}/complaints`, {
+      headers: { ...getAuthHeaders() },
+    })
+  },
+
+  async createComplaint(tenantId: number, complaint: {
+    customer_name?: string
+    customer_phone?: string
+    complaint_details: string
+    category?: string
+    priority?: string
+  }) {
+    return fetchJson(`${getApiBaseUrl()}/tenants/${tenantId}/complaints`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify(complaint),
+    })
+  },
+
+  async updateComplaint(
+    complaintId: number,
+    patch: {
+      status?: string
+      priority?: string
+      assigned_agent?: string | null
+      notes?: string | null
+      category?: string | null
+    },
+  ) {
+    return fetchJson(`${getApiBaseUrl()}/complaints/${complaintId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify(patch || {}),
+    })
+  },
+
   async login(email: string, password: string) {
     const response = await fetch(`${getApiBaseUrl()}/auth/login`, {
       method: 'POST',

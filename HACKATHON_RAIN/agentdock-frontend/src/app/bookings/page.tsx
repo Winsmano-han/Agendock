@@ -215,35 +215,108 @@ export default function BookingsPage() {
                         {a.customer_phone || '—'}
                       </td>
                       <td className="px-4 py-2">
-                        <select
-                          value={a.status}
-                          disabled={updatingId === a.id}
-                          onChange={async (e) => {
-                            const nextStatus = e.target.value
-                            setUpdatingId(a.id)
-                            try {
-                              await api.updateAppointmentStatus(a.id, nextStatus)
-                              setAppointments((prev) =>
-                                prev.map((ap) =>
-                                  ap.id === a.id ? { ...ap, status: nextStatus } : ap,
-                                ),
-                              )
-                            } catch (err) {
-                              console.error('Failed to update appointment status', err)
-                            } finally {
-                              setUpdatingId(null)
-                            }
-                          }}
-                          className="border border-gray-300 rounded-md text-xs px-2 py-1 bg-white"
-                        >
-                          {['pending', 'confirmed', 'completed', 'cancelled'].map(
-                            (status) => (
-                              <option key={status} value={status}>
-                                {status}
-                              </option>
-                            ),
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={a.status}
+                            disabled={updatingId === a.id}
+                            onChange={async (e) => {
+                              const nextStatus = e.target.value
+                              setUpdatingId(a.id)
+                              try {
+                                await api.updateAppointmentStatus(a.id, nextStatus)
+                                setAppointments((prev) =>
+                                  prev.map((ap) =>
+                                    ap.id === a.id ? { ...ap, status: nextStatus } : ap,
+                                  ),
+                                )
+                              } catch (err) {
+                                console.error('Failed to update appointment status', err)
+                              } finally {
+                                setUpdatingId(null)
+                              }
+                            }}
+                            className="border border-gray-300 rounded-md text-xs px-2 py-1 bg-white"
+                          >
+                            {['pending', 'confirmed', 'completed', 'cancelled'].map(
+                              (status) => (
+                                <option key={status} value={status}>
+                                  {status.charAt(0).toUpperCase() + status.slice(1)}
+                                </option>
+                              ),
+                            )}
+                          </select>
+                          {a.status === 'pending' && (
+                            <div className="flex gap-1">
+                              <button
+                                onClick={async () => {
+                                  setUpdatingId(a.id)
+                                  try {
+                                    await api.updateAppointmentStatus(a.id, 'confirmed')
+                                    setAppointments((prev) =>
+                                      prev.map((ap) =>
+                                        ap.id === a.id ? { ...ap, status: 'confirmed' } : ap,
+                                      ),
+                                    )
+                                  } catch (err) {
+                                    console.error('Failed to confirm appointment', err)
+                                  } finally {
+                                    setUpdatingId(null)
+                                  }
+                                }}
+                                disabled={updatingId === a.id}
+                                className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 disabled:opacity-50"
+                              >
+                                Confirm
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  if (window.confirm('Cancel this booking?')) {
+                                    setUpdatingId(a.id)
+                                    try {
+                                      await api.updateAppointmentStatus(a.id, 'cancelled')
+                                      setAppointments((prev) =>
+                                        prev.map((ap) =>
+                                          ap.id === a.id ? { ...ap, status: 'cancelled' } : ap,
+                                        ),
+                                      )
+                                    } catch (err) {
+                                      console.error('Failed to cancel appointment', err)
+                                    } finally {
+                                      setUpdatingId(null)
+                                    }
+                                  }
+                                }}
+                                disabled={updatingId === a.id}
+                                className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 disabled:opacity-50"
+                              >
+                                Cancel
+                              </button>
+                            </div>
                           )}
-                        </select>
+                          {a.status === 'confirmed' && (
+                            <button
+                              onClick={async () => {
+                                setUpdatingId(a.id)
+                                try {
+                                  await api.updateAppointmentStatus(a.id, 'completed')
+                                  setAppointments((prev) =>
+                                    prev.map((ap) =>
+                                      ap.id === a.id ? { ...ap, status: 'completed' } : ap,
+                                    ),
+                                  )
+                                } catch (err) {
+                                  console.error('Failed to complete appointment', err)
+                                } finally {
+                                  setUpdatingId(null)
+                                }
+                              }}
+                              disabled={updatingId === a.id}
+                              className="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:opacity-50"
+                            >
+                              Complete
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   )

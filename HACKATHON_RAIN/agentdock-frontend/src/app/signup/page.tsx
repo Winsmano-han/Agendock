@@ -17,7 +17,7 @@ export default function SignupPage() {
   const [error, setError] = useState('')
 
   const router = useRouter()
-  const { storeTenantId } = useTenant()
+  const { storeTenantId, storeAuthToken, storeRefreshToken } = useTenant()
 
   const businessTypes = [
     { value: 'general', label: 'General (services or products)' },
@@ -41,6 +41,20 @@ export default function SignupPage() {
         password: formData.password,
       })
       storeTenantId(response.id)
+      
+      // Automatically log the user in after account creation
+      try {
+        const loginResult = await api.login(formData.email, formData.password)
+        if (loginResult.auth_token) {
+          storeAuthToken(loginResult.auth_token)
+        }
+        if ((loginResult as any).refresh_token) {
+          storeRefreshToken((loginResult as any).refresh_token)
+        }
+      } catch (loginError) {
+        console.warn('Auto-login failed after signup:', loginError)
+      }
+      
       router.push('/onboarding')
     } catch {
       setError('Failed to create account. Please try again.')

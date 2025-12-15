@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import ServiceCatalog from '@/components/ServiceCatalog'
 import { useTenant } from '@/hooks/useTenant'
@@ -69,10 +70,11 @@ export default function AgentPreviewPage() {
         <div className="overflow-hidden rounded-3xl border border-slate-200/70 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
           <div className="relative h-56 sm:h-72 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600">
             {profile.cover_image_url && (
-              <img
+              <Image
                 src={profile.cover_image_url}
                 alt="Cover"
-                className="absolute inset-0 h-full w-full object-cover"
+                fill
+                className="object-cover"
               />
             )}
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-transparent" />
@@ -82,9 +84,11 @@ export default function AgentPreviewPage() {
             <div className="-mt-10 sm:-mt-12 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
               <div className="flex items-end gap-4">
                 {profile.profile_image_url ? (
-                  <img
+                  <Image
                     src={profile.profile_image_url}
                     alt={profile.name}
+                    width={112}
+                    height={112}
                     className="h-24 w-24 sm:h-28 sm:w-28 rounded-2xl object-cover border-4 border-white dark:border-slate-900 shadow-xl"
                   />
                 ) : (

@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import Image from 'next/image'
 import type { BusinessProfile } from '@/utils/api'
 
 type Service = BusinessProfile['services'][number]
@@ -31,11 +32,11 @@ function ServiceImage({
 }) {
   if (service.image_url) {
     return (
-      <img
+      <Image
         src={service.image_url}
         alt={service.name}
-        className="absolute inset-0 h-full w-full object-cover"
-        loading="lazy"
+        fill
+        className="object-cover"
       />
     )
   }

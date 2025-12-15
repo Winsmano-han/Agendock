@@ -98,7 +98,7 @@ export default function BookingsPage() {
     return () => {
       window.clearInterval(intervalId)
     }
-  }, [tenantId, mounted, router])
+  }, [tenantId, mounted, router, loadInitial, refreshAppointments])
 
   const filteredAppointments = useMemo(() => {
     if (statusFilter === 'all') return appointments

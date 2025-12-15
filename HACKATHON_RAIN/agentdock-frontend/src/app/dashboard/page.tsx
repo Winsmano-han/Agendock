@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import ChatPlayground from '@/components/ChatPlayground'
 import { useTenant } from '@/hooks/useTenant'
@@ -132,10 +133,11 @@ export default function DashboardPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
         <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white shadow-sm border border-white/10">
           {profile.cover_image_url && (
-            <img
+            <Image
               src={profile.cover_image_url}
               alt="Cover"
-              className="absolute inset-0 h-full w-full object-cover opacity-70"
+              fill
+              className="object-cover opacity-70"
             />
           )}
           <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/40 to-transparent" />
@@ -143,9 +145,11 @@ export default function DashboardPage() {
           <div className="relative px-6 py-6 sm:px-8 sm:py-7 lg:px-10 lg:py-8 flex flex-col lg:flex-row items-start lg:items-center gap-6">
             <div className="flex items-start gap-4">
               {profile.profile_image_url ? (
-                <img
+                <Image
                   src={profile.profile_image_url}
                   alt={profile.name}
+                  width={96}
+                  height={96}
                   className="h-20 w-20 sm:h-24 sm:w-24 rounded-2xl object-cover border-2 border-white shadow-xl"
                 />
               ) : (

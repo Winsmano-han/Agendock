@@ -1128,6 +1128,34 @@ def remove_session(exception: Any) -> None:
     db.close()
 
 
+@app.route("/", methods=["GET", "HEAD"])
+def root() -> tuple:
+  """
+  Root endpoint that serves as both health check and API documentation.
+  Handles both GET and HEAD requests for platform health checks.
+  """
+  return jsonify({
+    "service": "AgentDock API", 
+    "status": "healthy", 
+    "version": "1.0.0",
+    "description": "Multi-tenant AI agents for small businesses",
+    "endpoints": {
+      "health": "/health",
+      "tenants": "/tenants",
+      "auth": "/auth/login", 
+      "demo_chat": "/demo/chat",
+      "whatsapp": "/whatsapp/route",
+      "business_profile": "/tenants/{id}/business-profile",
+      "appointments": "/tenants/{id}/appointments",
+      "orders": "/tenants/{id}/orders",
+      "complaints": "/tenants/{id}/complaints"
+    },
+    "deployment": {
+      "platform": "render",
+      "frontend_url": "https://agendock-xi.vercel.app"
+    }
+  }), 200
+
 @app.route("/health", methods=["GET"])
 def health() -> tuple:
   return jsonify({"status": "ok", "service": "api"}), 200

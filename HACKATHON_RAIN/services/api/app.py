@@ -34,8 +34,14 @@ except Exception:  # pragma: no cover
 load_dotenv()
 
 
-# Default to SQLite for simple local setup
+# Use persistent database URL - critical for production
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///agentdock.db")
+
+# Ensure database persistence across deployments
+if DATABASE_URL.startswith("sqlite") and not os.path.isabs(DATABASE_URL.replace("sqlite:///", "")):
+  # Make SQLite path absolute to prevent recreation
+  db_path = os.path.join(os.getcwd(), DATABASE_URL.replace("sqlite:///", ""))
+  DATABASE_URL = f"sqlite:///{db_path}"
 AI_SERVICE_URL = os.getenv("AI_SERVICE_URL", "http://localhost:5002")
 DEFAULT_TENANT_ID = int(os.getenv("DEFAULT_TENANT_ID", "6"))
 WHATSAPP_WA_NUMBER = os.getenv("WHATSAPP_WA_NUMBER", "")
@@ -348,7 +354,8 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
 def init_db() -> None:
-  Base.metadata.create_all(bind=engine)
+  # Create tables only if they don't exist - prevents data loss
+  Base.metadata.create_all(bind=engine, checkfirst=True)
 
   # Lightweight migration for existing SQLite DBs: ensure tenants.business_code exists.
   if DATABASE_URL.startswith("sqlite"):
@@ -1228,11 +1235,16 @@ def create_session() -> None:
 def remove_session(exception: Any) -> None:
   db: Session = getattr(request, "db", None)
   if db is not None:
-    if exception is None:
-      db.commit()
-    else:
+    try:
+      if exception is None:
+        db.commit()
+      else:
+        db.rollback()
+    except Exception as e:
+      app.logger.error(f"Database session error: {e}")
       db.rollback()
-    db.close()
+    finally:
+      db.close()
 
 
 @app.route("/", methods=["GET", "HEAD"])
@@ -1470,22 +1482,32 @@ def create_tenant() -> tuple:
     return jsonify({"error": "name is required"}), 400
 
   db: Session = request.db
+  
+  # CRITICAL: Check if email already exists to prevent account overwriting
+  if email:
+    existing_owner = db.query(Owner).filter(Owner.email == str(email).strip().lower()).first()
+    if existing_owner:
+      return jsonify({"error": "An account with this email already exists. Please use a different email or login instead."}), 409
+  
+  # Create new tenant
   tenant = Tenant(name=name, business_type=business_type)
   db.add(tenant)
   db.flush()
   # Assign a human-friendly business_code like AGX7Q9L.
   ensure_business_code(db, tenant)
 
-  # Optionally create an owner record if email/password were provided.
+  # Create owner record if email/password were provided.
   if email and password:
-    existing = db.query(Owner).filter(Owner.email == email).first()
-    if existing is None:
-      owner = Owner(
-        tenant_id=tenant.id,
-        email=str(email).strip().lower(),
-        password=generate_password_hash(str(password)),
-      )
-      db.add(owner)
+    owner = Owner(
+      tenant_id=tenant.id,
+      email=str(email).strip().lower(),
+      password=generate_password_hash(str(password)),
+    )
+    db.add(owner)
+    db.flush()
+  
+  # CRITICAL: Commit immediately to prevent data loss
+  db.commit()
 
   return (
     jsonify(
@@ -2579,9 +2601,15 @@ def send_whatsapp_notification_to_owner(tenant: Tenant, message: str) -> bool:
     # Get owner's WhatsApp number from business profile
     owner_phone = None
     if isinstance(tenant.business_profile, dict):
-      owner_phone = tenant.business_profile.get("owner_whatsapp") or tenant.business_profile.get("owner_phone")
+      owner_phone = (
+        tenant.business_profile.get("whatsapp_number") or 
+        tenant.business_profile.get("contact_phone") or
+        tenant.business_profile.get("owner_whatsapp") or 
+        tenant.business_profile.get("owner_phone")
+      )
     
     if not owner_phone:
+      app.logger.info(f"No owner phone found for tenant {tenant.id} - skipping WhatsApp notification")
       return False
     
     # Use environment variables for Twilio credentials
@@ -2590,6 +2618,7 @@ def send_whatsapp_notification_to_owner(tenant: Tenant, message: str) -> bool:
     twilio_from = os.getenv("TWILIO_WHATSAPP_FROM", "whatsapp:+14155238886")
     
     if not twilio_sid or not twilio_token:
+      app.logger.info("Twilio credentials not configured - skipping WhatsApp notification")
       return False
     
     # Normalize phone number
@@ -2612,7 +2641,13 @@ def send_whatsapp_notification_to_owner(tenant: Tenant, message: str) -> bool:
       timeout=10,
     )
     
-    return response.status_code < 400
+    if response.status_code < 400:
+      app.logger.info(f"WhatsApp notification sent successfully to {owner_phone}")
+      return True
+    else:
+      app.logger.error(f"Failed to send WhatsApp notification: {response.status_code} - {response.text}")
+      return False
+      
   except Exception as exc:
     app.logger.error(f"Failed to send WhatsApp notification: {exc}")
     return False
@@ -2715,6 +2750,7 @@ def _create_appointment_from_action(
   )
   db.add(appointment)
   db.flush()
+  db.commit()  # CRITICAL: Ensure appointment is persisted immediately
   
   # Publish event for real-time updates
   publish_event(tenant_id, "appointment_created", {
@@ -2802,6 +2838,7 @@ def _create_order_from_action(
   )
   db.add(order)
   db.flush()
+  db.commit()  # CRITICAL: Ensure order is persisted immediately
   publish_event(tenant_id, "order_created", {"order_id": order.id, "customer_id": order.customer_id})
   
   # Send WhatsApp notification to business owner
@@ -2891,6 +2928,7 @@ def _create_complaint(
   )
   db.add(complaint)
   db.flush()
+  db.commit()  # CRITICAL: Ensure complaint is persisted immediately
   publish_event(tenant_id, "complaint_created", {"complaint_id": complaint.id, "customer_id": complaint.customer_id})
   
   # Send WhatsApp notification to business owner
@@ -3104,6 +3142,14 @@ def handle_incoming_message(
         customer_state.state = state_json
         customer_state.updated_at = datetime.utcnow()
         db.add(customer_state)
+        
+        # CRITICAL: Commit all changes before second AI call
+        try:
+          db.commit()
+        except Exception as e:
+          app.logger.error(f"Failed to commit tool results: {e}")
+          db.rollback()
+        
         data2 = call_ai(tool_results=tool_results)
         reply_text = filter_ai_response(data2.get("reply_text", reply_text))
         if isinstance(data2.get("meta"), dict) and not meta:

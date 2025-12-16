@@ -32,7 +32,11 @@ export default function PasswordRecoveryPage() {
       // Request password reset
       const result = await api.requestPasswordReset(email)
       if (result.reset_token) {
+        // Demo mode - token returned directly
         setResetToken(result.reset_token)
+        setStep('token')
+      } else if (result.status === 'ok') {
+        // Email sent mode - show token input
         setStep('token')
       }
     } catch (err: any) {
@@ -134,13 +138,45 @@ export default function PasswordRecoveryPage() {
 
           {step === 'token' && (
             <div className="space-y-6">
-              <div className="bg-blue-50 p-4 rounded-md">
-                <p className="text-sm text-blue-800">
-                  <strong>Demo Mode:</strong> Use this reset token: <code className="bg-white px-2 py-1 rounded text-xs">{resetToken}</code>
-                </p>
-              </div>
+              {resetToken && (
+                <div className="bg-blue-50 p-4 rounded-md">
+                  <p className="text-sm text-blue-800">
+                    <strong>Demo Mode:</strong> Use this reset token: <code className="bg-white px-2 py-1 rounded text-xs">{resetToken}</code>
+                  </p>
+                </div>
+              )}
+              
+              {!resetToken && (
+                <div className="bg-green-50 p-4 rounded-md">
+                  <p className="text-sm text-green-800">
+                    Check your email for the reset code and enter it below.
+                  </p>
+                </div>
+              )}
 
               <form onSubmit={handleTokenSubmit} className="space-y-6">
+                {!resetToken && (
+                  <div>
+                    <label htmlFor="resetCode" className="block text-sm font-medium text-gray-700">
+                      Reset Code from Email
+                    </label>
+                    <div className="mt-1">
+                      <input
+                        id="resetCode"
+                        name="resetCode"
+                        type="text"
+                        required={!resetToken}
+                        value={token}
+                        onChange={(e) => {
+                          setToken(e.target.value)
+                          setResetToken(e.target.value) // Use the entered token
+                        }}
+                        className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="Enter the code from your email"
+                      />
+                    </div>
+                  </div>
+                )}
                 <div>
                   <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700">
                     New Password

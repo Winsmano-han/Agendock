@@ -64,149 +64,28 @@ export default function Navbar() {
 
   const isActive = (path: string) => pathname === path
 
-  const NavLinks = ({ mobile }: { mobile?: boolean }) => (
-    <div
-      className={`flex ${
-        mobile ? 'flex-col gap-2' : 'items-center space-x-4'
-      }`}
-    >
-      <Link
-        href="/"
-        onClick={() => setMobileOpen(false)}
-        className={`${linkBase} ${
-          isActive('/') ? 'text-blue-600 dark:text-blue-400' : ''
-        }`}
-      >
-        Home
-      </Link>
-
-      {tenantId && (
-        <>
-          <Link
-            href="/dashboard"
-            onClick={() => setMobileOpen(false)}
-            className={`${linkBase} ${
-              isActive('/dashboard') ? 'text-blue-600 dark:text-blue-400' : ''
-            }`}
-          >
-            Dashboard
-          </Link>
-          <Link
-            href="/services"
-            onClick={() => setMobileOpen(false)}
-            className={`${linkBase} ${
-              isActive('/services') ? 'text-blue-600 dark:text-blue-400' : ''
-            }`}
-          >
-            Services
-          </Link>
-          <Link
-            href="/orders"
-            onClick={() => setMobileOpen(false)}
-            className={`${linkBase} ${
-              isActive('/orders') ? 'text-blue-600 dark:text-blue-400' : ''
-            }`}
-          >
-            Orders
-          </Link>
-          <Link
-            href="/bookings"
-            onClick={() => setMobileOpen(false)}
-            className={`${linkBase} ${
-              isActive('/bookings') ? 'text-blue-600 dark:text-blue-400' : ''
-            }`}
-          >
-            Bookings
-          </Link>
-          <Link
-            href="/complaints"
-            onClick={() => setMobileOpen(false)}
-            className={`${linkBase} ${
-              isActive('/complaints') ? 'text-blue-600 dark:text-blue-400' : ''
-            }`}
-          >
-            Complaints
-          </Link>
-          <Link
-            href="/handoffs"
-            onClick={() => setMobileOpen(false)}
-            className={`${linkBase} ${
-              isActive('/handoffs') ? 'text-blue-600 dark:text-blue-400' : ''
-            }`}
-          >
-            Handoffs
-          </Link>
-          <Link
-            href="/chats"
-            onClick={() => setMobileOpen(false)}
-            className={`${linkBase} ${
-              isActive('/chats') ? 'text-blue-600 dark:text-blue-400' : ''
-            }`}
-          >
-            Conversations
-          </Link>
-          <Link
-            href="/trace"
-            onClick={() => setMobileOpen(false)}
-            className={`${linkBase} ${
-              isActive('/trace') ? 'text-blue-600 dark:text-blue-400' : ''
-            }`}
-          >
-            Trace
-          </Link>
-          <Link
-            href="/agent-preview"
-            onClick={() => setMobileOpen(false)}
-            className={`${linkBase} ${
-              isActive('/agent-preview') ? 'text-blue-600 dark:text-blue-400' : ''
-            }`}
-          >
-            Live preview
-          </Link>
-          <Link
-            href="/settings"
-            onClick={() => setMobileOpen(false)}
-            className={`${linkBase} ${
-              isActive('/settings') ? 'text-blue-600 dark:text-blue-400' : ''
-            }`}
-          >
-            Settings
-          </Link>
-        </>
-      )}
-
-      {!tenantId ? (
-        <>
-          <Link
-            href="/login"
-            onClick={() => setMobileOpen(false)}
-            className={`${linkBase} ${
-              isActive('/login') ? 'text-blue-600 dark:text-blue-400' : ''
-            }`}
-          >
-            Login
-          </Link>
-          <Link
-            href="/signup"
-            onClick={() => setMobileOpen(false)}
-            className="inline-flex items-center justify-center rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-blue-500/30 hover:from-blue-500 hover:to-indigo-500 transition"
-          >
-            Get started
-          </Link>
-        </>
-      ) : (
-        <button
-          type="button"
-          onClick={handleLogout}
-          className={`${
-            mobile ? 'justify-start' : ''
-          } inline-flex items-center rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:text-rose-600 dark:text-slate-300 dark:hover:text-rose-300 transition-colors`}
+  const AuthLinks = () => {
+    if (tenantId) return null
+    
+    return (
+      <div className="flex items-center space-x-4">
+        <Link
+          href="/login"
+          className={`${linkBase} ${
+            isActive('/login') ? 'text-blue-600 dark:text-blue-400' : ''
+          }`}
         >
-          Logout
-        </button>
-      )}
-    </div>
-  )
+          Login
+        </Link>
+        <Link
+          href="/signup"
+          className="inline-flex items-center justify-center rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-blue-500/30 hover:from-blue-500 hover:to-indigo-500 transition"
+        >
+          Get started
+        </Link>
+      </div>
+    )
+  }
 
   return (
     <nav className="sticky top-0 z-50 border-b border-slate-200 bg-white/70 backdrop-blur dark:border-slate-800 dark:bg-slate-950/70">
@@ -230,46 +109,21 @@ export default function Navbar() {
             </div>
           </Link>
 
-          <div className="hidden md:flex items-center gap-4">
-            <NavLinks />
+          <div className="flex items-center gap-4">
+            <AuthLinks />
             <button
               type="button"
               onClick={toggleTheme}
               className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
               aria-label="Toggle theme"
             >
-              {theme === 'light' ? 'Dark' : 'Light'}
-            </button>
-          </div>
-
-          <div className="md:hidden flex items-center gap-2">
-            <button
-              type="button"
-              onClick={toggleTheme}
-              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-              aria-label="Toggle theme"
-            >
-              {theme === 'light' ? 'Dark' : 'Light'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setMobileOpen((v) => !v)}
-              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-              aria-label="Open menu"
-            >
-              Menu
+              {theme === 'light' ? '🌙' : '☀️'}
             </button>
           </div>
         </div>
       </div>
 
-      {mobileOpen && (
-        <div className="md:hidden border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
-          <div className="max-w-7xl mx-auto px-4 py-4 space-y-3">
-            <NavLinks mobile />
-          </div>
-        </div>
-      )}
+
     </nav>
   )
 }

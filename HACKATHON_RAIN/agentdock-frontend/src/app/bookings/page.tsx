@@ -128,7 +128,7 @@ export default function BookingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
         <div className="flex items-center justify-between">
           <div>
@@ -150,8 +150,8 @@ export default function BookingsPage() {
           </button>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm p-4 flex flex-wrap items-center gap-3 text-sm">
-          <span className="text-gray-700 font-medium">Filter by status:</span>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 flex flex-wrap items-center gap-3 text-sm">
+          <span className="text-gray-700 dark:text-gray-300 font-medium">Filter by status:</span>
           {['all', 'pending', 'confirmed', 'completed', 'cancelled'].map(
             (status) => (
               <button
@@ -170,7 +170,7 @@ export default function BookingsPage() {
           )}
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
           {filteredAppointments.length === 0 ? (
             <div className="p-6 text-sm text-gray-600">
               No bookings found for this filter.

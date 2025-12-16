@@ -60,6 +60,11 @@ if _GROQ_KEYS_RAW:
   GROQ_API_KEYS = [k.strip() for k in _GROQ_KEYS_RAW.split(",") if k.strip()]
 if GROQ_API_KEY and GROQ_API_KEY not in GROQ_API_KEYS:
   GROQ_API_KEYS.append(GROQ_API_KEY)
+
+# Twilio WhatsApp credentials (from environment variables)
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "")
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
+TWILIO_WHATSAPP_FROM = os.getenv("TWILIO_WHATSAPP_FROM", "whatsapp:+14155238886")
 LLAMA_MODEL = os.getenv("LLAMA_MODEL", "llama-3.3-70b-versatile").strip()
 LLAMA_FALLBACK_MODEL = os.getenv("LLAMA_FALLBACK_MODEL", "llama-3.1-8b-instant").strip()
 AI_DEBUG = os.getenv("AI_DEBUG", "0").strip() in {"1", "true", "TRUE"}
@@ -2602,9 +2607,9 @@ def send_whatsapp_notification_to_owner(tenant: Tenant, message: str) -> bool:
     owner_phone = None
     if isinstance(tenant.business_profile, dict):
       owner_phone = (
+        tenant.business_profile.get("owner_whatsapp") or 
         tenant.business_profile.get("whatsapp_number") or 
         tenant.business_profile.get("contact_phone") or
-        tenant.business_profile.get("owner_whatsapp") or 
         tenant.business_profile.get("owner_phone")
       )
     
@@ -2613,11 +2618,7 @@ def send_whatsapp_notification_to_owner(tenant: Tenant, message: str) -> bool:
       return False
     
     # Use environment variables for Twilio credentials
-    twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
-    twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
-    twilio_from = os.getenv("TWILIO_WHATSAPP_FROM", "whatsapp:+14155238886")
-    
-    if not twilio_sid or not twilio_token:
+    if not TWILIO_ACCOUNT_SID or not TWILIO_AUTH_TOKEN:
       app.logger.info("Twilio credentials not configured - skipping WhatsApp notification")
       return False
     
@@ -2627,9 +2628,9 @@ def send_whatsapp_notification_to_owner(tenant: Tenant, message: str) -> bool:
       owner_phone = f"+{owner_phone}"
     
     # Send WhatsApp message via Twilio
-    url = f"https://api.twilio.com/2010-04-01/Accounts/{twilio_sid}/Messages.json"
+    url = f"https://api.twilio.com/2010-04-01/Accounts/{TWILIO_ACCOUNT_SID}/Messages.json"
     data = {
-      "From": twilio_from,
+      "From": TWILIO_WHATSAPP_FROM,
       "To": f"whatsapp:{owner_phone}",
       "Body": message,
     }
@@ -2637,7 +2638,7 @@ def send_whatsapp_notification_to_owner(tenant: Tenant, message: str) -> bool:
     response = requests.post(
       url,
       data=data,
-      auth=(twilio_sid, twilio_token),
+      auth=(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN),
       timeout=10,
     )
     

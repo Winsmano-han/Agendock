@@ -422,7 +422,7 @@ export default function DashboardPage() {
                 </Link>
               </div>
 
-              <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Link
                   href="/chats"
                   className="group rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-4 hover:bg-white dark:hover:bg-slate-900 transition-colors"

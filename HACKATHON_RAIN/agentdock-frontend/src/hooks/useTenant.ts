@@ -2,8 +2,6 @@
 
 import { useState, useEffect } from 'react'
 
-function useTenantInternal() {
-
 export function useTenant() {
   const [tenantId, setTenantId] = useState<number | null>(null)
   const [authToken, setAuthToken] = useState<string | null>(null)

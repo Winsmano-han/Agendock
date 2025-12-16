@@ -59,9 +59,9 @@ export default function HomePage() {
             <Image 
               src="/logo.png" 
               alt="AgentDock Logo" 
-              width={40} 
-              height={40} 
-              className="rounded-xl"
+              width={48} 
+              height={48} 
+              className="rounded-xl object-contain"
             />
             <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
               AgentDock
@@ -268,9 +268,9 @@ export default function HomePage() {
             <Image 
               src="/logo.png" 
               alt="AgentDock Logo" 
-              width={32} 
-              height={32} 
-              className="rounded-lg"
+              width={40} 
+              height={40} 
+              className="rounded-lg object-contain"
             />
             <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
               AgentDock

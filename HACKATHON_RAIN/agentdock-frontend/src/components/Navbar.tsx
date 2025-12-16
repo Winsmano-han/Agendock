@@ -93,25 +93,7 @@ export default function Navbar() {
     <nav className="sticky top-0 z-50 border-b border-slate-200 bg-white/70 backdrop-blur dark:border-slate-800 dark:bg-slate-950/70">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
-          <Link
-            href="/"
-            className="group flex items-center gap-2"
-            onClick={() => setMobileOpen(false)}
-          >
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-sm shadow-blue-500/30">
-              A
-            </span>
-            <div className="leading-tight">
-              <div className="text-sm font-extrabold tracking-tight text-slate-900 dark:text-white">
-                AgentDock
-              </div>
-              <div className="hidden sm:block text-[11px] text-slate-500 dark:text-slate-400">
-                AI WhatsApp agents • multi-tenant • RAG
-              </div>
-            </div>
-          </Link>
-
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             {tenantId && (
               <button
                 type="button"
@@ -122,6 +104,26 @@ export default function Navbar() {
                 ☰
               </button>
             )}
+            <Link
+              href="/"
+              className="group flex items-center gap-2"
+              onClick={() => setMobileOpen(false)}
+            >
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-sm shadow-blue-500/30">
+                A
+              </span>
+              <div className="leading-tight">
+                <div className="text-sm font-extrabold tracking-tight text-slate-900 dark:text-white">
+                  AgentDock
+                </div>
+                <div className="hidden sm:block text-[11px] text-slate-500 dark:text-slate-400">
+                  AI WhatsApp agents • multi-tenant • RAG
+                </div>
+              </div>
+            </Link>
+          </div>
+
+          <div className="flex items-center gap-4">
             <AuthLinks />
             <button
               type="button"

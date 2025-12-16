@@ -1285,6 +1285,37 @@ def health() -> tuple:
   return jsonify({"status": "ok", "service": "api"}), 200
 
 
+@app.route("/db-test", methods=["GET"])
+def db_test() -> tuple:
+  """Test database connectivity and return connection info."""
+  try:
+    db = SessionLocal()
+    result = db.execute(text("SELECT 1")).fetchone()
+    
+    # Get database info
+    db_url = DATABASE_URL
+    db_type = "postgresql" if db_url.startswith("postgresql") else "sqlite" if db_url.startswith("sqlite") else "unknown"
+    
+    # Count tenants to verify data persistence
+    tenant_count = db.query(Tenant).count()
+    
+    db.close()
+    
+    return jsonify({
+      "status": "connected",
+      "database_type": db_type,
+      "test_query": result[0] if result else None,
+      "tenant_count": tenant_count,
+      "persistent": db_type != "sqlite"
+    }), 200
+  except Exception as e:
+    return jsonify({
+      "status": "error", 
+      "error": str(e),
+      "database_url_set": bool(DATABASE_URL)
+    }), 500
+
+
 @app.route("/tenants/<int:tenant_id>/knowledge", methods=["GET", "PUT"])
 def tenant_knowledge(tenant_id: int) -> tuple:
   """
@@ -1494,37 +1525,44 @@ def create_tenant() -> tuple:
     if existing_owner:
       return jsonify({"error": "An account with this email already exists. Please use a different email or login instead."}), 409
   
-  # Create new tenant
-  tenant = Tenant(name=name, business_type=business_type)
-  db.add(tenant)
-  db.flush()
-  # Assign a human-friendly business_code like AGX7Q9L.
-  ensure_business_code(db, tenant)
-
-  # Create owner record if email/password were provided.
-  if email and password:
-    owner = Owner(
-      tenant_id=tenant.id,
-      email=str(email).strip().lower(),
-      password=generate_password_hash(str(password)),
-    )
-    db.add(owner)
+  try:
+    # Create new tenant
+    tenant = Tenant(name=name, business_type=business_type)
+    db.add(tenant)
     db.flush()
-  
-  # CRITICAL: Commit immediately to prevent data loss
-  db.commit()
+    # Assign a human-friendly business_code like AGX7Q9L.
+    ensure_business_code(db, tenant)
 
-  return (
-    jsonify(
-      {
-        "id": tenant.id,
-        "name": tenant.name,
-        "business_type": tenant.business_type,
-        "business_code": tenant.business_code,
-      }
-    ),
-    201,
-  )
+    # Create owner record if email/password were provided.
+    if email and password:
+      owner = Owner(
+        tenant_id=tenant.id,
+        email=str(email).strip().lower(),
+        password=generate_password_hash(str(password)),
+      )
+      db.add(owner)
+      db.flush()
+    
+    # CRITICAL: Commit immediately to prevent data loss
+    db.commit()
+    
+    app.logger.info(f"Successfully created tenant {tenant.id} with email {email}")
+    
+    return (
+      jsonify(
+        {
+          "id": tenant.id,
+          "name": tenant.name,
+          "business_type": tenant.business_type,
+          "business_code": tenant.business_code,
+        }
+      ),
+      201,
+    )
+  except Exception as e:
+    db.rollback()
+    app.logger.error(f"Failed to create tenant: {e}")
+    return jsonify({"error": "Failed to create account. Please try again."}), 500
 
 
 @app.route("/auth/login", methods=["POST"])

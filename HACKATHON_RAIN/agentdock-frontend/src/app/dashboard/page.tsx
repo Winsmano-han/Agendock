@@ -105,7 +105,7 @@ export default function DashboardPage() {
   )
 
   const sandboxJoinLink =
-    'https://wa.me/14155238886?text=join%20vegetable-against'
+    'https://wa.me/14155238886?text=join%20human-room'
   const businessCode = profile?.business_code
   const startLink =
     businessCode != null

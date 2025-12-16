@@ -561,41 +561,41 @@ def sanitize_fts_query(query: str) -> str:
 
 def retrieve_knowledge_chunks(db: Session, tenant_id: int, query: str, limit: int = 4) -> list[dict]:
   """
-  Retrieve top-k relevant chunks via SQLite FTS5 BM25 ranking.
+  Retrieve top-k relevant chunks via simple text search (PostgreSQL compatible).
   Returns: [{chunk_id, content, source?, chunk_index?}]
   """
   q = sanitize_fts_query(query)
   if not q:
     return []
 
-  # Basic AND query to prefer intersection.
-  tokens = q.split()
-  if not tokens:
+  # Simple ILIKE search for PostgreSQL compatibility
+  search_terms = q.split()[:3]  # Limit to 3 terms
+  if not search_terms:
     return []
-  match_query = " AND ".join(tokens[:8])
-
-  rows = db.execute(
-    text(
-      "SELECT chunk_id, content FROM knowledge_chunks_fts "
-      "WHERE tenant_id = :tenant_id AND knowledge_chunks_fts MATCH :match "
-      "ORDER BY bm25(knowledge_chunks_fts) LIMIT :limit"
-    ),
-    {"tenant_id": tenant_id, "match": match_query, "limit": limit},
-  ).fetchall()
-
-  ids = [int(r[0]) for r in rows if r and r[0] is not None]
-  meta: Dict[int, Dict[str, Any]] = {}
-  if ids:
-    for kc in db.query(KnowledgeChunk).filter(KnowledgeChunk.id.in_(ids)).all():
-      meta[int(kc.id)] = {"source": kc.source, "chunk_index": kc.chunk_index}
+  
+  # Build ILIKE conditions for each term
+  conditions = []
+  params = {"tenant_id": tenant_id, "limit": limit}
+  for i, term in enumerate(search_terms):
+    conditions.append(f"content ILIKE :term{i}")
+    params[f"term{i}"] = f"%{term}%"
+  
+  where_clause = " AND ".join(conditions)
+  
+  chunks = db.query(KnowledgeChunk).filter(
+    KnowledgeChunk.tenant_id == tenant_id
+  ).filter(
+    text(where_clause).params(**{k: v for k, v in params.items() if k.startswith('term')})
+  ).limit(limit).all()
 
   out: list[dict] = []
-  for r in rows:
-    cid = int(r[0])
-    item = {"chunk_id": cid, "content": str(r[1])}
-    if cid in meta:
-      item.update(meta[cid])
-    out.append(item)
+  for kc in chunks:
+    out.append({
+      "chunk_id": kc.id,
+      "content": kc.content,
+      "source": kc.source,
+      "chunk_index": kc.chunk_index
+    })
   return out
 
 

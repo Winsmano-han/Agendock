@@ -10,19 +10,48 @@ from groq import Groq
 load_dotenv()
 
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+# Support multiple API keys for rate limit handling
+GROQ_API_KEYS = [
+  key.strip() for key in os.getenv("GROQ_API_KEYS", "").split(",") if key.strip()
+]
 LLAMA_MODEL = os.getenv("LLAMA_MODEL", "llama-3.3-70b-versatile")
 LLAMA_FALLBACK_MODEL = os.getenv("LLAMA_FALLBACK_MODEL", "llama-3.1-8b-instant")
 AI_DEBUG = os.getenv("AI_DEBUG", "0").strip() in {"1", "true", "TRUE"}
+
+# Track current API key index
+current_api_key_index = 0
 
 
 app = Flask(__name__)
 
 
-def get_groq_client() -> Groq:
-  if not GROQ_API_KEY:
-    raise RuntimeError("GROQ_API_KEY is not set. Please add it to your .env file.")
-  return Groq(api_key=GROQ_API_KEY)
+def get_groq_client(api_key_index: int = 0) -> Groq:
+  if not GROQ_API_KEYS:
+    raise RuntimeError("GROQ_API_KEYS is not set. Please add comma-separated API keys to your environment.")
+  if api_key_index >= len(GROQ_API_KEYS):
+    api_key_index = 0
+  return Groq(api_key=GROQ_API_KEYS[api_key_index])
+
+def try_with_api_rotation(func, *args, **kwargs):
+  """Try function with API key rotation on rate limit."""
+  global current_api_key_index
+  
+  for attempt in range(len(GROQ_API_KEYS)):
+    try:
+      result = func(current_api_key_index, *args, **kwargs)
+      return result, current_api_key_index
+    except Exception as exc:
+      message = str(exc)
+      is_rate_limited = ("rate_limit_exceeded" in message) or ("Rate limit reached" in message)
+      
+      if is_rate_limited and attempt < len(GROQ_API_KEYS) - 1:
+        app.logger.warning(f"API key {current_api_key_index + 1} rate limited, switching to next key")
+        current_api_key_index = (current_api_key_index + 1) % len(GROQ_API_KEYS)
+        continue
+      else:
+        raise exc
+  
+  raise RuntimeError("All API keys exhausted")
 
 
 def detect_jailbreak_attempt(text: str) -> bool:
@@ -466,8 +495,8 @@ def generate_reply() -> tuple:
 
   debug: Dict[str, Any] = {"model_used": LLAMA_MODEL}
 
-  def run_completion(model_name: str) -> str:
-    client = get_groq_client()
+  def run_completion_with_key(api_key_index: int, model_name: str) -> str:
+    client = get_groq_client(api_key_index)
     completion = client.chat.completions.create(
       model=model_name,
       messages=messages,
@@ -479,7 +508,8 @@ def generate_reply() -> tuple:
     return completion.choices[0].message.content or ""
 
   try:
-    raw = run_completion(LLAMA_MODEL)
+    raw, used_key_index = try_with_api_rotation(run_completion_with_key, LLAMA_MODEL)
+    debug["api_key_used"] = used_key_index + 1
     reply_text = raw
     actions: List[Dict[str, Any]] = []
     
@@ -523,7 +553,8 @@ def generate_reply() -> tuple:
     if is_rate_limited and LLAMA_FALLBACK_MODEL:
       try:
         debug["model_used"] = LLAMA_FALLBACK_MODEL
-        raw = run_completion(LLAMA_FALLBACK_MODEL)
+        raw, fallback_key_index = try_with_api_rotation(run_completion_with_key, LLAMA_FALLBACK_MODEL)
+        debug["fallback_api_key_used"] = fallback_key_index + 1
         reply_text = raw.strip() or (
           "I'm getting a lot of traffic right now and can't reach my AI brain for a moment. "
           "Please wait a few minutes and try again - your previous messages are safe and you won't lose your chat."
@@ -597,8 +628,8 @@ def polish_text() -> tuple:
 
   suggested_text = raw_text
 
-  try:
-    client = get_groq_client()
+  def polish_completion_with_key(api_key_index: int) -> str:
+    client = get_groq_client(api_key_index)
     completion = client.chat.completions.create(
       model=LLAMA_MODEL,
       messages=messages,
@@ -607,7 +638,10 @@ def polish_text() -> tuple:
       top_p=1,
       stream=False,
     )
-    content = completion.choices[0].message.content or ""
+    return completion.choices[0].message.content or ""
+
+  try:
+    content, _ = try_with_api_rotation(polish_completion_with_key)
     try:
       data = json.loads(content)
       if isinstance(data, dict) and data.get("suggested_text"):
@@ -681,8 +715,8 @@ def faq_suggestions() -> tuple:
   faqs: list[Dict[str, str]] = []
   notes: list[str] = []
 
-  try:
-    client = get_groq_client()
+  def faq_completion_with_key(api_key_index: int) -> str:
+    client = get_groq_client(api_key_index)
     completion = client.chat.completions.create(
       model=LLAMA_MODEL,
       messages=messages,
@@ -691,7 +725,10 @@ def faq_suggestions() -> tuple:
       top_p=1,
       stream=False,
     )
-    content = completion.choices[0].message.content or ""
+    return completion.choices[0].message.content or ""
+
+  try:
+    content, _ = try_with_api_rotation(faq_completion_with_key)
     data = json.loads(content)
     raw_faqs = data.get("faqs") or []
     if isinstance(raw_faqs, list):
@@ -769,8 +806,8 @@ def conversation_summary() -> tuple:
   sentiment = "neutral"
   next_steps = ""
 
-  try:
-    client = get_groq_client()
+  def summary_completion_with_key(api_key_index: int) -> str:
+    client = get_groq_client(api_key_index)
     completion = client.chat.completions.create(
       model=LLAMA_MODEL,
       messages=messages,
@@ -779,7 +816,10 @@ def conversation_summary() -> tuple:
       top_p=1,
       stream=False,
     )
-    content = completion.choices[0].message.content or ""
+    return completion.choices[0].message.content or ""
+
+  try:
+    content, _ = try_with_api_rotation(summary_completion_with_key)
     data = json.loads(content)
     s = (data.get("summary") or "").strip()
     if s:
@@ -867,8 +907,8 @@ def coaching_insights() -> tuple:
 
   insights: list[Dict[str, str]] = []
 
-  try:
-    client = get_groq_client()
+  def coaching_completion_with_key(api_key_index: int) -> str:
+    client = get_groq_client(api_key_index)
     completion = client.chat.completions.create(
       model=LLAMA_MODEL,
       messages=messages,
@@ -877,7 +917,10 @@ def coaching_insights() -> tuple:
       top_p=1,
       stream=False,
     )
-    content = completion.choices[0].message.content or ""
+    return completion.choices[0].message.content or ""
+
+  try:
+    content, _ = try_with_api_rotation(coaching_completion_with_key)
     data = json.loads(content)
     raw_insights = data.get("insights") or []
     if isinstance(raw_insights, list):
@@ -961,8 +1004,8 @@ def setup_assistant() -> tuple:
   profile_patch: Dict[str, Any] = {}
   step_hint = "none"
 
-  try:
-    client = get_groq_client()
+  def setup_completion_with_key(api_key_index: int) -> str:
+    client = get_groq_client(api_key_index)
     completion = client.chat.completions.create(
       model=LLAMA_MODEL,
       messages=messages,
@@ -971,7 +1014,10 @@ def setup_assistant() -> tuple:
       top_p=1,
       stream=False,
     )
-    content = completion.choices[0].message.content or ""
+    return completion.choices[0].message.content or ""
+
+  try:
+    content, _ = try_with_api_rotation(setup_completion_with_key)
     clean = content.strip()
 
     # Some models may wrap JSON in ```json ...``` fences; strip them if present.

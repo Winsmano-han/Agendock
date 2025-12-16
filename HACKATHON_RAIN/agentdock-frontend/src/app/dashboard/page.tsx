@@ -12,6 +12,7 @@ interface Stats {
   conversations_today?: number
   unread_conversations?: number
   total_appointments: number
+  total_complaints: number
   most_requested_service_name: string | null
   most_requested_service_count: number
 }

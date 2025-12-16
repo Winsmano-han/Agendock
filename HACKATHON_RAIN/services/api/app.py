@@ -2766,12 +2766,13 @@ def _create_appointment_from_action(
     tenant = db.get(Tenant, tenant_id)
     if tenant:
       notification_msg = (
-        f"🔔 New Booking Alert!\n\n"
-        f"📅 Service: {service.name}\n"
-        f"👤 Customer: {canonical_name or 'N/A'}\n"
-        f"📞 Phone: {canonical_phone or 'N/A'}\n"
-        f"🕐 Time: {start_time.strftime('%Y-%m-%d at %I:%M %p')}\n\n"
-        f"View details in your AgentDock dashboard."
+        f"🎉 *NEW BOOKING CONFIRMED!*\n\n"
+        f"📋 *Service:* {service.name}\n"
+        f"👤 *Customer:* {canonical_name or 'Walk-in'}\n"
+        f"📱 *Contact:* {canonical_phone or 'Not provided'}\n"
+        f"📅 *Date & Time:* {start_time.strftime('%a, %b %d at %I:%M %p')}\n\n"
+        f"💼 *Action Required:* Please confirm this booking\n"
+        f"📊 View full details in your AgentDock dashboard"
       )
       send_whatsapp_notification_to_owner(tenant, notification_msg)
   except Exception as exc:
@@ -2850,12 +2851,13 @@ def _create_order_from_action(
         items_text += f" + {len(items) - 3} more items"
       
       notification_msg = (
-        f"🛒 New Order Alert!\n\n"
-        f"📦 Items: {items_text}\n"
-        f"👤 Customer: {customer_name or 'N/A'}\n"
-        f"📞 Phone: {customer_phone or 'N/A'}\n"
-        f"💰 Total: ${(total or 0) / 100:.2f}\n\n"
-        f"View details in your AgentDock dashboard."
+        f"🛒 *NEW ORDER RECEIVED!*\n\n"
+        f"📦 *Items:* {items_text}\n"
+        f"👤 *Customer:* {customer_name or 'Anonymous'}\n"
+        f"📱 *Contact:* {customer_phone or 'Not provided'}\n"
+        f"💵 *Total Amount:* ${(total or 0) / 100:.2f}\n\n"
+        f"⏰ *SLA:* Process within 2 hours\n"
+        f"📊 Manage order in your dashboard"
       )
       send_whatsapp_notification_to_owner(tenant, notification_msg)
   except Exception as exc:
@@ -2936,13 +2938,14 @@ def _create_complaint(
     tenant = db.get(Tenant, tenant_id)
     if tenant:
       notification_msg = (
-        f"⚠️ New Complaint Alert!\n\n"
-        f"📝 Details: {complaint_details[:100]}{'...' if len(complaint_details) > 100 else ''}\n"
-        f"📂 Category: {category}\n"
-        f"🔥 Priority: {priority}\n"
-        f"👤 Customer: {customer_name or 'N/A'}\n"
-        f"📞 Phone: {customer_phone or 'N/A'}\n\n"
-        f"Please address this complaint promptly in your dashboard."
+        f"⚠️ *URGENT: NEW COMPLAINT*\n\n"
+        f"📝 *Issue:* {complaint_details[:80]}{'...' if len(complaint_details) > 80 else ''}\n"
+        f"📂 *Category:* {category}\n"
+        f"🔥 *Priority:* {priority}\n"
+        f"👤 *Customer:* {customer_name or 'Anonymous'}\n"
+        f"📱 *Contact:* {customer_phone or 'Not provided'}\n\n"
+        f"⏱️ *Action Required:* Immediate response needed\n"
+        f"📊 Address in your dashboard now"
       )
       send_whatsapp_notification_to_owner(tenant, notification_msg)
   except Exception as exc:
@@ -3524,6 +3527,13 @@ def tenant_stats(tenant_id: int) -> tuple:
     or 0
   )
 
+  total_complaints = int(
+    db.query(func.count(Complaint.id))
+    .filter(Complaint.tenant_id == tenant_id)
+    .scalar()
+    or 0
+  )
+
   # Most requested service by appointment count
   most_requested_service_name = None
   most_requested_service_count = 0
@@ -3558,6 +3568,7 @@ def tenant_stats(tenant_id: int) -> tuple:
         "conversations_today": conversations_today,
         "unread_conversations": unread_conversations,
         "total_appointments": total_appointments,
+        "total_complaints": total_complaints,
         "most_requested_service_name": most_requested_service_name,
         "most_requested_service_count": most_requested_service_count,
       }

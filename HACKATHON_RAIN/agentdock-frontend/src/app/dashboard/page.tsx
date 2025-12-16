@@ -26,6 +26,7 @@ export default function DashboardPage() {
   const [profile, setProfile] = useState<BusinessProfile | null>(null)
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const [showChat, setShowChat] = useState(false)
   const [whatsAppCopied, setWhatsAppCopied] = useState(false)
@@ -46,6 +47,7 @@ export default function DashboardPage() {
 
   const [coachLoading, setCoachLoading] = useState(false)
   const [coachInsights, setCoachInsights] = useState<CoachInsight[]>([])
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
 
   useEffect(() => {
     if (!mounted) return
@@ -56,6 +58,7 @@ export default function DashboardPage() {
 
     const load = async () => {
       try {
+        setError(null)
         const [profileData, statsData, knowledgeData] = await Promise.all([
           api.getBusinessProfile(tenantId),
           api.getStats(tenantId),
@@ -70,6 +73,7 @@ export default function DashboardPage() {
         )
       } catch (err) {
         console.error('Failed to load dashboard data', err)
+        setError('Unable to load dashboard data. Please refresh the page or try again later.')
       } finally {
         setLoading(false)
         setKnowledgeLoading(false)
@@ -77,6 +81,21 @@ export default function DashboardPage() {
     }
 
     load()
+    
+    // Auto-refresh stats every 30 seconds
+    const interval = setInterval(async () => {
+      if (tenantId) {
+        try {
+          const freshStats = await api.getStats(tenantId)
+          setStats(freshStats)
+          setLastRefresh(new Date())
+        } catch (err) {
+          console.error('Failed to refresh stats', err)
+        }
+      }
+    }, 30000)
+    
+    return () => clearInterval(interval)
   }, [tenantId, mounted, router])
 
   const openingHoursEntries = useMemo(
@@ -100,6 +119,28 @@ export default function DashboardPage() {
           <p className="text-gray-600 dark:text-gray-300">
             Loading dashboard...
           </p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-slate-950 flex items-center justify-center">
+        <div className="text-center max-w-md px-4">
+          <div className="text-red-500 text-6xl mb-4">⚠️</div>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
+            Something went wrong
+          </h2>
+          <p className="text-gray-600 dark:text-gray-300 mb-6">
+            {error}
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Refresh Page
+          </button>
         </div>
       </div>
     )
@@ -140,8 +181,8 @@ export default function DashboardPage() {
           )}
           <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/40 to-transparent" />
 
-          <div className="relative px-6 py-6 sm:px-8 sm:py-7 lg:px-10 lg:py-8 flex flex-col lg:flex-row items-start lg:items-center gap-6">
-            <div className="flex items-start gap-4">
+          <div className="relative px-4 py-4 sm:px-6 sm:py-6 lg:px-10 lg:py-8 flex flex-col lg:flex-row items-start lg:items-center gap-4 sm:gap-6">
+            <div className="flex items-start gap-3 sm:gap-4">
               {profile.profile_image_url ? (
                 <img
                   src={profile.profile_image_url}
@@ -170,7 +211,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <div className="ml-auto flex flex-col items-stretch gap-3 w-full lg:w-[26rem]">
+            <div className="w-full lg:ml-auto lg:w-[26rem] flex flex-col items-stretch gap-3">
               <div className="bg-white/10 border border-white/15 rounded-2xl px-4 py-3 text-xs text-blue-50 backdrop-blur-md">
                 <div className="flex items-center justify-between mb-1">
                   <span className="font-semibold text-blue-50">
@@ -468,7 +509,7 @@ export default function DashboardPage() {
                     Complaints
                   </div>
                   <div className="mt-1 text-2xl font-semibold text-slate-900 dark:text-white">
-                    0
+                    {stats?.total_complaints ?? 0}
                   </div>
                   <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
                     Manage issues →

@@ -4,7 +4,7 @@ import './globals.css'
 import Navbar from '@/components/Navbar'
 import Sidebar from '@/components/Sidebar'
 import MainContent from '@/components/MainContent'
-import { TenantProvider } from '@/hooks/useTenant'
+import { TenantProvider } from '@/contexts/TenantContext'
 import { SidebarProvider } from '@/contexts/SidebarContext'
 import { ToastProvider } from '@/components/ui/Toast'
 

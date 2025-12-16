@@ -1,40 +1,10 @@
 'use client'
 
-import { useState, useEffect, createContext, useContext, ReactNode } from 'react'
-
-interface TenantContextType {
-  tenantId: number | null
-  authToken: string | null
-  refreshToken: string | null
-  storeTenantId: (id: number) => void
-  storeAuthToken: (token: string) => void
-  storeRefreshToken: (token: string) => void
-  clearTenant: () => void
-  mounted: boolean
-}
-
-const TenantContext = createContext<TenantContextType | undefined>(undefined)
-
-export function TenantProvider({ children }: { children: ReactNode }) {
-  const tenantData = useTenantInternal()
-  return (
-    <TenantContext.Provider value={tenantData}>
-      {children}
-    </TenantContext.Provider>
-  )
-}
+import { useState, useEffect } from 'react'
 
 function useTenantInternal() {
 
 export function useTenant() {
-  const context = useContext(TenantContext)
-  if (context === undefined) {
-    throw new Error('useTenant must be used within a TenantProvider')
-  }
-  return context
-}
-
-function useTenantInternal() {
   const [tenantId, setTenantId] = useState<number | null>(null)
   const [authToken, setAuthToken] = useState<string | null>(null)
   const [refreshToken, setRefreshToken] = useState<string | null>(null)

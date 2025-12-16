@@ -1197,6 +1197,7 @@ def maybe_require_auth(tenant_id: int) -> Optional[tuple]:
   """
   Optional auth gate. If AUTH_REQUIRED=1, enforce Authorization bearer tokens.
   """
+  # Temporarily disable auth for testing - change back to "0" for production
   if os.getenv("AUTH_REQUIRED", "0").strip() not in {"1", "true", "TRUE"}:
     return None
   token = parse_bearer_token()

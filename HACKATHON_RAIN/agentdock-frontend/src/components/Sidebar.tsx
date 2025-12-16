@@ -45,8 +45,8 @@ export default function Sidebar() {
       )}
       
       <div className={`fixed left-0 top-0 h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 z-40 transition-all duration-300 ${
-        collapsed ? 'w-16' : 'w-64'
-      } ${collapsed ? '' : 'lg:translate-x-0'} ${collapsed ? '-translate-x-full lg:translate-x-0' : 'translate-x-0'}`}>
+        collapsed ? 'w-16 -translate-x-full lg:translate-x-0' : 'w-64 translate-x-0'
+      }`}>
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
         {!collapsed && (

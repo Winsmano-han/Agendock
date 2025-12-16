@@ -2614,18 +2614,29 @@ def send_whatsapp_notification_to_owner(tenant: Tenant, message: str) -> bool:
       )
     
     if not owner_phone:
-      app.logger.info(f"No owner phone found for tenant {tenant.id} - skipping WhatsApp notification")
+      app.logger.warning(f"No owner phone found for tenant {tenant.id} - skipping WhatsApp notification")
       return False
     
     # Use environment variables for Twilio credentials
     if not TWILIO_ACCOUNT_SID or not TWILIO_AUTH_TOKEN:
-      app.logger.info("Twilio credentials not configured - skipping WhatsApp notification")
+      app.logger.warning(f"Twilio credentials not configured - SID: {'SET' if TWILIO_ACCOUNT_SID else 'MISSING'}, TOKEN: {'SET' if TWILIO_AUTH_TOKEN else 'MISSING'}")
       return False
     
-    # Normalize phone number
+    # Normalize phone number - ensure it's in E.164 format
     owner_phone = normalize_phone(owner_phone)
+    if not owner_phone:
+      app.logger.error(f"Invalid phone number format for tenant {tenant.id}")
+      return False
+      
+    # Ensure phone number starts with + for international format
     if not owner_phone.startswith("+"):
-      owner_phone = f"+{owner_phone}"
+      # If it's a US number without country code, add +1
+      if len(owner_phone) == 10 and owner_phone.isdigit():
+        owner_phone = f"+1{owner_phone}"
+      else:
+        owner_phone = f"+{owner_phone}"
+    
+    app.logger.info(f"Attempting to send WhatsApp notification to {owner_phone} for tenant {tenant.id}")
     
     # Send WhatsApp message via Twilio
     url = f"https://api.twilio.com/2010-04-01/Accounts/{TWILIO_ACCOUNT_SID}/Messages.json"
@@ -2635,12 +2646,16 @@ def send_whatsapp_notification_to_owner(tenant: Tenant, message: str) -> bool:
       "Body": message,
     }
     
+    app.logger.info(f"Sending request to Twilio: FROM={TWILIO_WHATSAPP_FROM}, TO=whatsapp:{owner_phone}")
+    
     response = requests.post(
       url,
       data=data,
       auth=(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN),
-      timeout=10,
+      timeout=15,
     )
+    
+    app.logger.info(f"Twilio response: {response.status_code} - {response.text}")
     
     if response.status_code < 400:
       app.logger.info(f"WhatsApp notification sent successfully to {owner_phone}")
@@ -2650,7 +2665,7 @@ def send_whatsapp_notification_to_owner(tenant: Tenant, message: str) -> bool:
       return False
       
   except Exception as exc:
-    app.logger.error(f"Failed to send WhatsApp notification: {exc}")
+    app.logger.error(f"Exception sending WhatsApp notification: {exc}", exc_info=True)
     return False
 
 
@@ -4904,6 +4919,45 @@ def update_appointment(appointment_id: int) -> tuple:
     ),
     200,
   )
+
+
+@app.route("/test-whatsapp/<int:tenant_id>", methods=["POST"])
+def test_whatsapp_notification(tenant_id: int) -> tuple:
+  """
+  Test endpoint to debug WhatsApp notifications.
+  """
+  db: Session = request.db
+  tenant = db.get(Tenant, tenant_id)
+  if tenant is None:
+    return jsonify({"error": "tenant not found"}), 404
+  
+  payload: Dict[str, Any] = request.get_json(force=True, silent=True) or {}
+  test_message = payload.get("message", "🧪 Test notification from AgentDock")
+  
+  # Log current configuration
+  app.logger.info(f"Testing WhatsApp for tenant {tenant_id}")
+  app.logger.info(f"TWILIO_ACCOUNT_SID: {'SET' if TWILIO_ACCOUNT_SID else 'MISSING'}")
+  app.logger.info(f"TWILIO_AUTH_TOKEN: {'SET' if TWILIO_AUTH_TOKEN else 'MISSING'}")
+  app.logger.info(f"TWILIO_WHATSAPP_FROM: {TWILIO_WHATSAPP_FROM}")
+  
+  if isinstance(tenant.business_profile, dict):
+    owner_phone = (
+      tenant.business_profile.get("owner_whatsapp") or 
+      tenant.business_profile.get("whatsapp_number") or 
+      tenant.business_profile.get("contact_phone") or
+      tenant.business_profile.get("owner_phone")
+    )
+    app.logger.info(f"Owner phone from profile: {owner_phone}")
+  
+  success = send_whatsapp_notification_to_owner(tenant, test_message)
+  
+  return jsonify({
+    "success": success,
+    "tenant_id": tenant_id,
+    "message": test_message,
+    "twilio_configured": bool(TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN),
+    "whatsapp_from": TWILIO_WHATSAPP_FROM
+  }), 200
 
 
 @app.route("/tenants/<int:tenant_id>/personalization", methods=["GET", "POST"])

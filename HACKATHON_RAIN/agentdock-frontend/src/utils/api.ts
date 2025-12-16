@@ -461,6 +461,82 @@ export const api = {
     return { url }
   },
 
+  async getAnalytics(tenantId: number) {
+    return fetchJson(`${getApiBaseUrl()}/tenants/${tenantId}/analytics`, {
+      headers: { ...getAuthHeaders() },
+    })
+  },
+
+  async getSentimentAnalysis(tenantId: number) {
+    return fetchJson(`${getApiBaseUrl()}/tenants/${tenantId}/sentiment-analysis`, {
+      headers: { ...getAuthHeaders() },
+    })
+  },
+
+  async getOptimizationSuggestions(tenantId: number) {
+    return fetchJson(`${getApiBaseUrl()}/tenants/${tenantId}/optimization-suggestions`, {
+      headers: { ...getAuthHeaders() },
+    })
+  },
+
+  async generateSocialContent(tenantId: number, params: {
+    platform: string
+    content_type: string
+    service_focus?: string
+    tone: string
+  }) {
+    return fetchJson(`${getApiBaseUrl()}/tenants/${tenantId}/generate-social-content`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify(params),
+    })
+  },
+
+  async getPersonalization(tenantId: number) {
+    return fetchJson(`${getApiBaseUrl()}/tenants/${tenantId}/personalization`, {
+      headers: { ...getAuthHeaders() },
+    })
+  },
+
+  async updatePersonalization(tenantId: number, data: {
+    customer_id: number
+    preferences: any
+  }) {
+    return fetchJson(`${getApiBaseUrl()}/tenants/${tenantId}/personalization`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify(data),
+    })
+  },
+
+  async createComplaint(tenantId: number, complaint: {
+    customer_name?: string
+    customer_phone?: string
+    complaint_details: string
+    category?: string
+    priority?: string
+  }) {
+    return fetchJson(`${getApiBaseUrl()}/tenants/${tenantId}/complaints`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify(complaint),
+    })
+  },
+
+  async updateComplaint(complaintId: number, patch: {
+    status?: string
+    priority?: string
+    assigned_agent?: string | null
+    notes?: string | null
+    category?: string | null
+  }) {
+    return fetchJson(`${getApiBaseUrl()}/complaints/${complaintId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify(patch || {}),
+    })
+  },
+
   async deleteProfile(tenantId: number) {
     return fetchJson(`${getApiBaseUrl()}/tenants/${tenantId}`, {
       method: 'DELETE',

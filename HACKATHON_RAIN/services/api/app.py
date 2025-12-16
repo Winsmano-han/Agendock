@@ -59,6 +59,11 @@ if GROQ_API_KEY and GROQ_API_KEY not in GROQ_API_KEYS:
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "")
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
 TWILIO_WHATSAPP_FROM = os.getenv("TWILIO_WHATSAPP_FROM", "whatsapp:+14155238886")
+
+# SendGrid email credentials
+SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY", "")
+FROM_EMAIL = os.getenv("FROM_EMAIL", "noreply@agentdock.com")
+FROM_NAME = os.getenv("FROM_NAME", "AgentDock")
 LLAMA_MODEL = os.getenv("LLAMA_MODEL", "llama-3.3-70b-versatile").strip()
 LLAMA_FALLBACK_MODEL = os.getenv("LLAMA_FALLBACK_MODEL", "llama-3.1-8b-instant").strip()
 AI_DEBUG = os.getenv("AI_DEBUG", "0").strip() in {"1", "true", "TRUE"}
@@ -123,6 +128,17 @@ class OwnerPasswordReset(Base):
   created_at = Column(DateTime, default=datetime.utcnow)
   expires_at = Column(DateTime, nullable=False)
   used_at = Column(DateTime, nullable=True)
+
+
+class EmailVerification(Base):
+  __tablename__ = "email_verifications"
+
+  id = Column(Integer, primary_key=True, index=True)
+  email = Column(String, nullable=False, index=True)
+  token_hash = Column(String, nullable=False, unique=True, index=True)
+  created_at = Column(DateTime, default=datetime.utcnow)
+  expires_at = Column(DateTime, nullable=False)
+  verified_at = Column(DateTime, nullable=True)
 
 
 class Agent(Base):
@@ -362,6 +378,26 @@ def init_db() -> None:
       if not result.fetchone():
         conn.exec_driver_sql(
           "ALTER TABLE tenants ADD COLUMN business_code VARCHAR"
+        )
+
+      # Check if email_verifications table exists
+      result = conn.exec_driver_sql(
+        "SELECT table_name FROM information_schema.tables "
+        "WHERE table_name = 'email_verifications'"
+      )
+      if not result.fetchone():
+        conn.exec_driver_sql(
+          "CREATE TABLE email_verifications ("
+          "id SERIAL PRIMARY KEY, "
+          "email VARCHAR NOT NULL, "
+          "token_hash VARCHAR NOT NULL UNIQUE, "
+          "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
+          "expires_at TIMESTAMP NOT NULL, "
+          "verified_at TIMESTAMP"
+          ")"
+        )
+        conn.exec_driver_sql(
+          "CREATE INDEX IF NOT EXISTS idx_email_verifications_email ON email_verifications(email)"
         )
 
       # Lightweight migrations for tool/ops UX fields.
@@ -1695,9 +1731,9 @@ def auth_refresh() -> tuple:
 @app.route("/auth/request-password-reset", methods=["POST"])
 def request_password_reset() -> tuple:
   """
-  Hackathon password reset flow (no email sending):
+  Password reset with email sending:
   - Input: { "email": "..." }
-  - Output: { "reset_token": "..." } (show it to the user for demo)
+  - Sends reset email or returns token for demo
   """
   payload: Dict[str, Any] = request.get_json(force=True, silent=True) or {}
   email = (payload.get("email") or "").strip().lower()
@@ -1707,8 +1743,8 @@ def request_password_reset() -> tuple:
   db: Session = request.db
   owner = db.query(Owner).filter(Owner.email == email).first()
   if owner is None:
-    # Don't leak whether email exists.
-    return jsonify({"status": "ok"}), 200
+    # Don't leak whether email exists, but still return success
+    return jsonify({"status": "ok", "message": "If the email exists, a reset link has been sent"}), 200
 
   token_raw = secrets.token_urlsafe(32)
   token_hash = hashlib.sha256(token_raw.encode("utf-8")).hexdigest()
@@ -1722,7 +1758,28 @@ def request_password_reset() -> tuple:
       used_at=None,
     )
   )
-  return jsonify({"status": "ok", "reset_token": token_raw}), 200
+  
+  # Send password reset email
+  if SENDGRID_API_KEY:
+    html_content = f"""
+    <h2>Password Reset Request</h2>
+    <p>You requested a password reset for your AgentDock account.</p>
+    <p>Use this reset code:</p>
+    <h3 style="background: #f0f0f0; padding: 10px; font-family: monospace;">{token_raw}</h3>
+    <p>This code expires in 30 minutes.</p>
+    <p>If you didn't request this, please ignore this email.</p>
+    """
+    
+    email_sent = send_email(email, "Password Reset - AgentDock", html_content)
+    
+    if email_sent:
+      return jsonify({"status": "ok", "message": "Password reset email sent"}), 200
+    else:
+      # Fallback to demo mode if email fails
+      return jsonify({"status": "ok", "reset_token": token_raw, "message": "Email failed - Demo token provided"}), 200
+  else:
+    # Demo mode when SendGrid not configured
+    return jsonify({"status": "ok", "reset_token": token_raw, "message": "Demo mode: Use this reset token"}), 200
 
 
 @app.route("/auth/reset-password", methods=["POST"])
@@ -1758,6 +1815,114 @@ def reset_password() -> tuple:
   db.add(pr)
 
   return jsonify({"status": "ok"}), 200
+
+
+@app.route("/auth/verify-email", methods=["POST"])
+def verify_email() -> tuple:
+  """
+  Verify email address with token:
+  Body: { "email": "...", "token": "..." }
+  """
+  payload: Dict[str, Any] = request.get_json(force=True, silent=True) or {}
+  email = (payload.get("email") or "").strip().lower()
+  token_raw = (payload.get("token") or "").strip()
+  
+  if not email or not token_raw:
+    return jsonify({"error": "email and token are required"}), 400
+
+  token_hash = hashlib.sha256(token_raw.encode("utf-8")).hexdigest()
+  db: Session = request.db
+  
+  verification = db.query(EmailVerification).filter(
+    EmailVerification.email == email,
+    EmailVerification.token_hash == token_hash
+  ).first()
+  
+  if verification is None or verification.verified_at is not None:
+    return jsonify({"error": "invalid verification token"}), 400
+  if verification.expires_at and verification.expires_at < datetime.utcnow():
+    return jsonify({"error": "verification token expired"}), 400
+
+  verification.verified_at = datetime.utcnow()
+  db.add(verification)
+
+  return jsonify({"status": "verified"}), 200
+
+
+@app.route("/auth/send-verification", methods=["POST"])
+def send_verification() -> tuple:
+  """
+  Send email verification token:
+  Body: { "email": "..." }
+  """
+  payload: Dict[str, Any] = request.get_json(force=True, silent=True) or {}
+  email = (payload.get("email") or "").strip().lower()
+  
+  if not email:
+    return jsonify({"error": "email is required"}), 400
+
+  db: Session = request.db
+  
+  # Generate verification token
+  token_raw = secrets.token_urlsafe(32)
+  token_hash = hashlib.sha256(token_raw.encode("utf-8")).hexdigest()
+  now = datetime.utcnow()
+  
+  verification = EmailVerification(
+    email=email,
+    token_hash=token_hash,
+    created_at=now,
+    expires_at=now + timedelta(hours=24),  # 24 hour expiry
+    verified_at=None,
+  )
+  db.add(verification)
+  
+  # Send verification email
+  if SENDGRID_API_KEY:
+    html_content = f"""
+    <h2>Verify Your Email</h2>
+    <p>Please verify your email address by entering this code:</p>
+    <h3 style="background: #f0f0f0; padding: 10px; font-family: monospace;">{token_raw}</h3>
+    <p>This code expires in 24 hours.</p>
+    <p>If you didn't request this, please ignore this email.</p>
+    """
+    
+    email_sent = send_email(email, "Verify Your Email - AgentDock", html_content)
+    
+    if email_sent:
+      return jsonify({"status": "sent", "message": "Verification email sent successfully"}), 200
+    else:
+      # Fallback to demo mode if email fails
+      return jsonify({
+        "status": "sent", 
+        "verification_token": token_raw,
+        "message": "Email failed - Demo token provided"
+      }), 200
+  else:
+    # Demo mode when SendGrid not configured
+    return jsonify({
+      "status": "sent", 
+      "verification_token": token_raw,
+      "message": "Demo mode: Use this token to verify"
+    }), 200
+
+
+@app.route("/auth/check-email", methods=["POST"])
+def check_email() -> tuple:
+  """
+  Check if email exists in database:
+  Body: { "email": "..." }
+  """
+  payload: Dict[str, Any] = request.get_json(force=True, silent=True) or {}
+  email = (payload.get("email") or "").strip().lower()
+  
+  if not email:
+    return jsonify({"error": "email is required"}), 400
+
+  db: Session = request.db
+  owner = db.query(Owner).filter(Owner.email == email).first()
+  
+  return jsonify({"exists": owner is not None}), 200
 
 
 @app.route("/tenants/<int:tenant_id>/business-profile", methods=["GET", "PUT"])
@@ -2642,6 +2807,43 @@ def _tool_check_availability(
   if existing:
     return {"type": "CHECK_AVAILABILITY", "ok": True, "available": False, "reason": "slot already booked"}
   return {"type": "CHECK_AVAILABILITY", "ok": True, "available": True}
+
+
+def send_email(to_email: str, subject: str, html_content: str) -> bool:
+  """
+  Send email using SendGrid API.
+  """
+  if not SENDGRID_API_KEY:
+    app.logger.warning("SendGrid API key not configured")
+    return False
+  
+  try:
+    import sendgrid
+    from sendgrid.helpers.mail import Mail
+    
+    message = Mail(
+      from_email=(FROM_EMAIL, FROM_NAME),
+      to_emails=to_email,
+      subject=subject,
+      html_content=html_content
+    )
+    
+    sg = sendgrid.SendGridAPIClient(api_key=SENDGRID_API_KEY)
+    response = sg.send(message)
+    
+    if response.status_code < 400:
+      app.logger.info(f"Email sent successfully to {to_email}")
+      return True
+    else:
+      app.logger.error(f"SendGrid error: {response.status_code} - {response.body}")
+      return False
+      
+  except ImportError:
+    app.logger.error("SendGrid package not installed. Run: pip install sendgrid")
+    return False
+  except Exception as exc:
+    app.logger.error(f"Email send failed: {exc}")
+    return False
 
 
 def send_whatsapp_notification_to_owner(tenant: Tenant, message: str) -> bool:
@@ -4942,6 +5144,58 @@ def reset_tenant_demo(tenant_id: int) -> tuple:
   return jsonify({"status": "ok", "wiped_profile": wipe_profile}), 200
 
 
+@app.route("/tenants/<int:tenant_id>", methods=["DELETE"])
+def delete_tenant_profile(tenant_id: int) -> tuple:
+  """
+  Permanently delete a tenant and all associated data.
+  This is irreversible and removes everything.
+  """
+  db: Session = request.db
+  tenant = db.get(Tenant, tenant_id)
+  if tenant is None:
+    return jsonify({"error": "tenant not found"}), 404
+  auth_err = maybe_require_auth(tenant_id)
+  if auth_err is not None:
+    return auth_err
+
+  try:
+    # Delete all associated data first (foreign key constraints)
+    db.query(AgentTrace).filter(AgentTrace.tenant_id == tenant_id).delete()
+    db.query(ConversationRead).filter(ConversationRead.tenant_id == tenant_id).delete()
+    db.query(Message).filter(Message.tenant_id == tenant_id).delete()
+    db.query(Appointment).filter(Appointment.tenant_id == tenant_id).delete()
+    db.query(Order).filter(Order.tenant_id == tenant_id).delete()
+    db.query(Handoff).filter(Handoff.tenant_id == tenant_id).delete()
+    db.query(Complaint).filter(Complaint.tenant_id == tenant_id).delete()
+    db.query(Customer).filter(Customer.tenant_id == tenant_id).delete()
+    db.query(UserSession).filter(UserSession.tenant_id == tenant_id).delete()
+    db.query(CustomerState).filter(CustomerState.tenant_id == tenant_id).delete()
+    db.query(AIReplyCache).filter(AIReplyCache.tenant_id == tenant_id).delete()
+    db.query(Service).filter(Service.tenant_id == tenant_id).delete()
+    db.query(KnowledgeChunk).filter(KnowledgeChunk.tenant_id == tenant_id).delete()
+    db.query(TenantKnowledge).filter(TenantKnowledge.tenant_id == tenant_id).delete()
+    db.query(Agent).filter(Agent.tenant_id == tenant_id).delete()
+    
+    # Delete owners and their tokens
+    owners = db.query(Owner).filter(Owner.tenant_id == tenant_id).all()
+    for owner in owners:
+      db.query(OwnerRefreshToken).filter(OwnerRefreshToken.owner_id == owner.id).delete()
+      db.query(OwnerPasswordReset).filter(OwnerPasswordReset.owner_id == owner.id).delete()
+    db.query(Owner).filter(Owner.tenant_id == tenant_id).delete()
+    
+    # Finally delete the tenant itself
+    db.delete(tenant)
+    
+    db.commit()
+    
+    return jsonify({"status": "deleted", "message": "Tenant and all associated data permanently deleted"}), 200
+    
+  except Exception as exc:
+    db.rollback()
+    app.logger.error(f"Failed to delete tenant {tenant_id}: {exc}")
+    return jsonify({"error": "Failed to delete tenant profile"}), 500
+
+
 @app.route("/appointments/<int:appointment_id>", methods=["PATCH"])
 def update_appointment(appointment_id: int) -> tuple:
   """
@@ -4957,12 +5211,63 @@ def update_appointment(appointment_id: int) -> tuple:
 
   payload: Dict[str, Any] = request.get_json(force=True, silent=True) or {}
   new_status = payload.get("status")
+  old_status = appointment.status
 
   if new_status:
     allowed_statuses = {"pending", "confirmed", "completed", "cancelled"}
     if new_status not in allowed_statuses:
       return jsonify({"error": "invalid status"}), 400
     appointment.status = new_status
+
+    # Send customer notification when appointment is confirmed
+    if old_status == "pending" and new_status == "confirmed" and appointment.customer_phone:
+      try:
+        tenant = db.get(Tenant, appointment.tenant_id)
+        service = db.get(Service, appointment.service_id) if appointment.service_id else None
+        service_name = service.name if service else "your appointment"
+        
+        # Format the appointment time
+        appointment_time = appointment.start_time.strftime('%a, %b %d at %I:%M %p')
+        
+        # Send WhatsApp message to customer
+        customer_message = (
+          f"✅ *BOOKING CONFIRMED!*\n\n"
+          f"Great news! Your booking has been confirmed:\n\n"
+          f"📋 *Service:* {service_name}\n"
+          f"📅 *Date & Time:* {appointment_time}\n"
+          f"🏪 *Business:* {tenant.name if tenant else 'Our Business'}\n\n"
+          f"We look forward to seeing you! If you need to make any changes, please contact us directly."
+        )
+        
+        # Use Twilio to send message to customer
+        if TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN:
+          customer_phone = appointment.customer_phone
+          if not customer_phone.startswith("+"):
+            if len(customer_phone) == 10 and customer_phone.isdigit():
+              customer_phone = f"+1{customer_phone}"
+            else:
+              customer_phone = f"+{customer_phone}"
+          
+          url = f"https://api.twilio.com/2010-04-01/Accounts/{TWILIO_ACCOUNT_SID}/Messages.json"
+          data = {
+            "From": TWILIO_WHATSAPP_FROM,
+            "To": f"whatsapp:{customer_phone}",
+            "Body": customer_message,
+          }
+          
+          response = requests.post(
+            url,
+            data=data,
+            auth=(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN),
+            timeout=15,
+          )
+          
+          if response.status_code < 400:
+            app.logger.info(f"Confirmation message sent to customer {customer_phone}")
+          else:
+            app.logger.error(f"Failed to send confirmation to customer: {response.status_code} - {response.text}")
+      except Exception as exc:
+        app.logger.error(f"Failed to send customer confirmation: {exc}")
 
   db.add(appointment)
 

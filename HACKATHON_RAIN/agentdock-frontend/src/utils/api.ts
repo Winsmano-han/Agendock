@@ -317,8 +317,8 @@ export const api = {
   },
 
   async updateAppointmentStatus(appointmentId: number, status: string) {
-    return fetchJson(`${getApiBaseUrl()}/appointments/${appointmentId}/status`, {
-      method: 'PUT',
+    return fetchJson(`${getApiBaseUrl()}/appointments/${appointmentId}`, {
+      method: 'PATCH',
       headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
       body: JSON.stringify({ status }),
     })
@@ -512,6 +512,42 @@ export const api = {
     return response.json()
   },
 
+  async resetPassword(resetToken: string, newPassword: string) {
+    const response = await fetch(`${getApiBaseUrl()}/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reset_token: resetToken, new_password: newPassword }),
+    })
+    return response.json()
+  },
+
+  async checkEmail(email: string) {
+    const response = await fetch(`${getApiBaseUrl()}/auth/check-email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    })
+    return response.json()
+  },
+
+  async sendEmailVerification(email: string) {
+    const response = await fetch(`${getApiBaseUrl()}/auth/send-verification`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    })
+    return response.json()
+  },
+
+  async verifyEmail(email: string, token: string) {
+    const response = await fetch(`${getApiBaseUrl()}/auth/verify-email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, token }),
+    })
+    return response.json()
+  },
+
   async getAnalytics(tenantId: number) {
     return fetchJson(`${getApiBaseUrl()}/tenants/${tenantId}/analytics`, {
       headers: { ...getAuthHeaders() },
@@ -557,6 +593,13 @@ export const api = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
       body: JSON.stringify(data),
+    })
+  },
+
+  async deleteProfile(tenantId: number) {
+    return fetchJson(`${getApiBaseUrl()}/tenants/${tenantId}`, {
+      method: 'DELETE',
+      headers: { ...getAuthHeaders() },
     })
   },
 }

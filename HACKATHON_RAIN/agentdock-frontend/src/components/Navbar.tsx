@@ -163,6 +163,15 @@ export default function Navbar() {
           >
             Live preview
           </Link>
+          <Link
+            href="/settings"
+            onClick={() => setMobileOpen(false)}
+            className={`${linkBase} ${
+              isActive('/settings') ? 'text-blue-600 dark:text-blue-400' : ''
+            }`}
+          >
+            Settings
+          </Link>
         </>
       )}
 

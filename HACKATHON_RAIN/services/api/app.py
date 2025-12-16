@@ -34,14 +34,8 @@ except Exception:  # pragma: no cover
 load_dotenv()
 
 
-# Use persistent database URL - critical for production
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///agentdock.db")
-
-# Ensure database persistence across deployments
-if DATABASE_URL.startswith("sqlite") and not os.path.isabs(DATABASE_URL.replace("sqlite:///", "")):
-  # Make SQLite path absolute to prevent recreation
-  db_path = os.path.join(os.getcwd(), DATABASE_URL.replace("sqlite:///", ""))
-  DATABASE_URL = f"sqlite:///{db_path}"
+# PostgreSQL database URL - critical for production
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://localhost/agentdock")
 AI_SERVICE_URL = os.getenv("AI_SERVICE_URL", "http://localhost:5002")
 DEFAULT_TENANT_ID = int(os.getenv("DEFAULT_TENANT_ID", "6"))
 WHATSAPP_WA_NUMBER = os.getenv("WHATSAPP_WA_NUMBER", "")
@@ -71,15 +65,8 @@ AI_DEBUG = os.getenv("AI_DEBUG", "0").strip() in {"1", "true", "TRUE"}
 USE_EMBEDDED_AI = os.getenv("USE_EMBEDDED_AI", "").strip().lower() in {"1", "true", "yes"}
 
 
-if DATABASE_URL.startswith("sqlite"):
-  engine = create_engine(
-    DATABASE_URL,
-    echo=False,
-    future=True,
-    connect_args={"check_same_thread": False},
-  )
-else:
-  engine = create_engine(DATABASE_URL, echo=False, future=True)
+# PostgreSQL engine configuration
+engine = create_engine(DATABASE_URL, echo=False, future=True)
 SessionLocal = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=engine))
 Base = declarative_base()
 
@@ -362,20 +349,8 @@ def init_db() -> None:
   # Create tables only if they don't exist - prevents data loss
   Base.metadata.create_all(bind=engine, checkfirst=True)
 
-  # Lightweight migration for existing DBs: ensure tenants.business_code exists.
-  if DATABASE_URL.startswith("sqlite"):
-    from sqlalchemy.engine import Connection
-
-    with engine.begin() as conn:  # type: Connection
-      cols = [
-        row[1]
-        for row in conn.exec_driver_sql("PRAGMA table_info(tenants)")
-      ]
-      if "business_code" not in cols:
-        conn.exec_driver_sql(
-          "ALTER TABLE tenants ADD COLUMN business_code TEXT"
-        )
-  elif DATABASE_URL.startswith("postgresql"):
+  # PostgreSQL-specific migrations
+  if DATABASE_URL.startswith("postgresql"):
     from sqlalchemy.engine import Connection
     
     with engine.begin() as conn:  # type: Connection
@@ -428,21 +403,16 @@ def init_db() -> None:
         ),
       ]:
         try:
-          if DATABASE_URL.startswith("sqlite"):
-            existing_cols = [
-              row[1] for row in conn.exec_driver_sql(f"PRAGMA table_info({table_name})")
-            ]
-          else:
-            # PostgreSQL column check
-            result = conn.exec_driver_sql(
-              "SELECT column_name FROM information_schema.columns "
-              "WHERE table_name = %s", (table_name,)
-            )
-            existing_cols = [row[0] for row in result.fetchall()]
+          # PostgreSQL column check
+          result = conn.exec_driver_sql(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = %s", (table_name,)
+          )
+          existing_cols = [row[0] for row in result.fetchall()]
           
           for col_name, col_type in wanted_cols:
             if col_name not in existing_cols:
-              # Convert SQLite types to PostgreSQL types
+              # PostgreSQL types
               pg_type = col_type.replace("TEXT", "VARCHAR").replace("DATETIME", "TIMESTAMP")
               conn.exec_driver_sql(
                 f"ALTER TABLE {table_name} ADD COLUMN {col_name} {pg_type}"
@@ -492,22 +462,14 @@ def init_db() -> None:
         # Some SQLite builds may not support partial indexes; code-level guards still apply.
         pass
 
-      # Full-text index for knowledge chunks (PostgreSQL compatible)
+      # Full-text index for knowledge chunks (PostgreSQL GIN index)
       try:
-        # Create GIN index for full-text search on PostgreSQL
         conn.exec_driver_sql(
           "CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_content_gin "
           "ON knowledge_chunks USING gin(to_tsvector('english', content))"
         )
       except Exception:
-        # Fallback for SQLite - create virtual table
-        try:
-          conn.exec_driver_sql(
-            "CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_chunks_fts "
-            "USING fts5(tenant_id UNINDEXED, chunk_id UNINDEXED, content)"
-          )
-        except Exception:
-          pass
+        pass
 
 
 # Ensure DB schema is up to date on import so the API
@@ -546,15 +508,7 @@ def rebuild_knowledge_index(db: Session, tenant_id: int, raw_text: str) -> None:
   db.query(KnowledgeChunk).filter(KnowledgeChunk.tenant_id == tenant_id).delete()
   db.flush()
 
-  # Remove old FTS rows for tenant (SQLite only).
-  try:
-    db.execute(
-      text("DELETE FROM knowledge_chunks_fts WHERE tenant_id = :tenant_id"),
-      {"tenant_id": tenant_id},
-    )
-  except Exception:
-    # PostgreSQL doesn't use FTS virtual table
-    pass
+  # PostgreSQL uses GIN index automatically, no separate FTS table needed
 
   chunks = chunk_text(raw_text)
   if not chunks:
@@ -570,19 +524,6 @@ def rebuild_knowledge_index(db: Session, tenant_id: int, raw_text: str) -> None:
     )
     db.add(kc)
     db.flush()  # get kc.id
-    
-    # Insert into FTS table for SQLite compatibility
-    try:
-      db.execute(
-        text(
-          "INSERT INTO knowledge_chunks_fts(tenant_id, chunk_id, content) "
-          "VALUES (:tenant_id, :chunk_id, :content)"
-        ),
-        {"tenant_id": tenant_id, "chunk_id": kc.id, "content": content},
-      )
-    except Exception:
-      # PostgreSQL doesn't need separate FTS table
-      pass
 
 
 def sanitize_fts_query(query: str) -> str:
@@ -617,20 +558,13 @@ def retrieve_knowledge_chunks(db: Session, tenant_id: int, query: str, limit: in
   if not search_terms:
     return []
   
-  # Build ILIKE conditions for each term
-  conditions = []
-  params = {"tenant_id": tenant_id, "limit": limit}
-  for i, term in enumerate(search_terms):
-    conditions.append(f"content ILIKE :term{i}")
-    params[f"term{i}"] = f"%{term}%"
-  
-  where_clause = " AND ".join(conditions)
-  
-  chunks = db.query(KnowledgeChunk).filter(
+  # Build ILIKE conditions for each term (PostgreSQL case-insensitive)
+  query = db.query(KnowledgeChunk).filter(
     KnowledgeChunk.tenant_id == tenant_id
-  ).filter(
-    text(where_clause).params(**{k: v for k, v in params.items() if k.startswith('term')})
-  ).limit(limit).all()
+  )
+  for term in search_terms:
+    query = query.filter(KnowledgeChunk.content.ilike(f'%{term}%'))
+  chunks = query.limit(limit).all()
 
   out: list[dict] = []
   for kc in chunks:
@@ -1009,6 +943,7 @@ def _embedded_ai_generate(payload: Dict[str, Any]) -> Dict[str, Any]:
         "role": "system",
         "content": (
           "Tool results are provided below. You MUST use these results and then respond to the user. "
+          "If an appointment was successfully created, confirm the booking details and mention that the business owner has been notified via WhatsApp. "
           "DO NOT output any ACTION_JSON lines in this response.\n\n"
           f"{tool_results}"
         ),
@@ -1073,8 +1008,9 @@ def _embedded_ai_generate(payload: Dict[str, Any]) -> Dict[str, Any]:
   booking_reminder = (
     "BOOKING REMINDER: If the user wants to book and you have service + date/time + name + phone, "
     "you MUST create the appointment immediately with ACTION_JSON. Do not ask for confirmation. "
+    "After creating the booking, always confirm it was successful and mention that the business owner will be notified. "
     "EXAMPLE: If user says 'book Fade for Jan 20 2025 at 2pm, John Smith +1234567890' you MUST respond: "
-    "'Perfect! I'll book your Fade for January 20, 2025 at 2:00 PM.' then add: "
+    "'Perfect! I've successfully booked your Fade for January 20, 2025 at 2:00 PM. The business owner has been notified via WhatsApp and will confirm your appointment shortly.' then add: "
     "ACTION_JSON:{\"type\":\"CREATE_APPOINTMENT\",\"start_time_iso\":\"2025-01-20T14:00:00\",\"service_name\":\"Fade\",\"customer_name\":\"John Smith\",\"customer_phone\":\"+1234567890\"}"
   )
   messages.append({"role": "system", "content": booking_reminder})
@@ -1367,7 +1303,7 @@ def db_test() -> tuple:
     
     # Get database info
     db_url = DATABASE_URL
-    db_type = "postgresql" if db_url.startswith("postgresql") else "sqlite" if db_url.startswith("sqlite") else "unknown"
+    db_type = "postgresql"
     
     # Count tenants to verify data persistence
     tenant_count = db.query(Tenant).count()
@@ -1379,7 +1315,7 @@ def db_test() -> tuple:
       "database_type": db_type,
       "test_query": result[0] if result else None,
       "tenant_count": tenant_count,
-      "persistent": db_type != "sqlite"
+      "persistent": True
     }), 200
   except Exception as e:
     return jsonify({
@@ -4997,12 +4933,6 @@ def reset_tenant_demo(tenant_id: int) -> tuple:
   db.query(Service).filter(Service.tenant_id == tenant_id).delete()
   db.query(KnowledgeChunk).filter(KnowledgeChunk.tenant_id == tenant_id).delete()
   db.query(TenantKnowledge).filter(TenantKnowledge.tenant_id == tenant_id).delete()
-  try:
-    # Only delete from FTS table if it exists (SQLite only)
-    db.execute(text("DELETE FROM knowledge_chunks_fts WHERE tenant_id = :tenant_id"), {"tenant_id": tenant_id})
-  except Exception:
-    # PostgreSQL doesn't use separate FTS table
-    pass
 
   if wipe_profile:
     tenant.business_profile = None

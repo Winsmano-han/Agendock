@@ -4,6 +4,8 @@ import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { api, BusinessProfile } from '@/utils/api'
 import { useTenant } from '@/hooks/useTenant'
+import { useToast } from '@/components/ui/Toast'
+import { TableSkeleton } from '@/components/ui/LoadingSkeleton'
 
 type Appointment = {
   id: number
@@ -20,6 +22,7 @@ type Appointment = {
 export default function BookingsPage() {
   const { tenantId, mounted } = useTenant()
   const router = useRouter()
+  const { showToast } = useToast()
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [servicesMap, setServicesMap] = useState<Record<number, string>>({})
   const [profile, setProfile] = useState<BusinessProfile | null>(null)
@@ -107,8 +110,13 @@ export default function BookingsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-gray-600">Loading bookings…</p>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+          <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/3 animate-pulse"></div>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4">
+            <TableSkeleton rows={8} />
+          </div>
+        </div>
       </div>
     )
   }
@@ -120,8 +128,10 @@ export default function BookingsPage() {
     try {
       await api.clearAppointments(tenantId)
       setAppointments([])
+      showToast('All bookings cleared successfully', 'success')
     } catch (err) {
       console.error('Failed to clear appointments', err)
+      showToast('Failed to clear bookings', 'error')
     } finally {
       setClearing(false)
     }
@@ -176,7 +186,8 @@ export default function BookingsPage() {
               No bookings found for this filter.
             </div>
           ) : (
-            <table className="min-w-full text-sm">
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-4 py-2 text-left text-gray-600 font-semibold">
@@ -229,8 +240,10 @@ export default function BookingsPage() {
                                     ap.id === a.id ? { ...ap, status: nextStatus } : ap,
                                   ),
                                 )
+                                showToast(`Booking ${nextStatus}`, 'success')
                               } catch (err) {
                                 console.error('Failed to update appointment status', err)
+                                showToast('Failed to update booking', 'error')
                               } finally {
                                 setUpdatingId(null)
                               }
@@ -257,8 +270,10 @@ export default function BookingsPage() {
                                         ap.id === a.id ? { ...ap, status: 'confirmed' } : ap,
                                       ),
                                     )
+                                    showToast('Booking confirmed', 'success')
                                   } catch (err) {
                                     console.error('Failed to confirm appointment', err)
+                                    showToast('Failed to confirm booking', 'error')
                                   } finally {
                                     setUpdatingId(null)
                                   }
@@ -279,8 +294,10 @@ export default function BookingsPage() {
                                           ap.id === a.id ? { ...ap, status: 'cancelled' } : ap,
                                         ),
                                       )
+                                      showToast('Booking cancelled', 'success')
                                     } catch (err) {
                                       console.error('Failed to cancel appointment', err)
+                                      showToast('Failed to cancel booking', 'error')
                                     } finally {
                                       setUpdatingId(null)
                                     }
@@ -304,8 +321,10 @@ export default function BookingsPage() {
                                       ap.id === a.id ? { ...ap, status: 'completed' } : ap,
                                     ),
                                   )
+                                  showToast('Booking completed', 'success')
                                 } catch (err) {
                                   console.error('Failed to complete appointment', err)
+                                  showToast('Failed to complete booking', 'error')
                                 } finally {
                                   setUpdatingId(null)
                                 }
@@ -322,7 +341,8 @@ export default function BookingsPage() {
                   )
                 })}
               </tbody>
-            </table>
+              </table>
+            </div>
           )}
         </div>
       </div>

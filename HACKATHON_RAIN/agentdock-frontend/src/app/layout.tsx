@@ -3,6 +3,10 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import Navbar from '@/components/Navbar'
 import Sidebar from '@/components/Sidebar'
+import MainContent from '@/components/MainContent'
+import { TenantProvider } from '@/hooks/useTenant'
+import { SidebarProvider } from '@/contexts/SidebarContext'
+import { ToastProvider } from '@/components/ui/Toast'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -21,11 +25,17 @@ export default function RootLayout({
       <body
         className={`${inter.className} bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-50`}
       >
-        <Navbar />
-        <Sidebar />
-        <div className="pl-64">
-          {children}
-        </div>
+        <TenantProvider>
+          <SidebarProvider>
+            <ToastProvider>
+              <Navbar />
+              <Sidebar />
+              <MainContent>
+                {children}
+              </MainContent>
+            </ToastProvider>
+          </SidebarProvider>
+        </TenantProvider>
       </body>
     </html>
   )

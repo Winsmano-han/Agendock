@@ -333,6 +333,38 @@ def health() -> tuple:
   return jsonify({"status": "ok", "service": "ai", "model": LLAMA_MODEL}), 200
 
 
+@app.route("/api-status", methods=["GET"])
+def api_status() -> tuple:
+  """Check API key status and usage."""
+  status = {
+    "total_keys": len(GROQ_API_KEYS),
+    "current_key_index": current_api_key_index,
+    "keys_configured": bool(GROQ_API_KEYS)
+  }
+  
+  # Test each key
+  for i, key in enumerate(GROQ_API_KEYS):
+    try:
+      client = Groq(api_key=key)
+      # Simple test call
+      completion = client.chat.completions.create(
+        model="llama-3.1-8b-instant",
+        messages=[{"role": "user", "content": "test"}],
+        max_tokens=1
+      )
+      status[f"key_{i+1}_status"] = "active"
+    except Exception as exc:
+      error_msg = str(exc)
+      if "rate_limit" in error_msg.lower():
+        status[f"key_{i+1}_status"] = "rate_limited"
+      elif "401" in error_msg or "unauthorized" in error_msg.lower():
+        status[f"key_{i+1}_status"] = "invalid"
+      else:
+        status[f"key_{i+1}_status"] = f"error: {error_msg[:50]}"
+  
+  return jsonify(status), 200
+
+
 @app.route("/generate-reply", methods=["POST"])
 def generate_reply() -> tuple:
   """

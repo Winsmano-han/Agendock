@@ -5026,6 +5026,43 @@ def test_whatsapp_notification(tenant_id: int) -> tuple:
   }), 200
 
 
+@app.route("/test-ai", methods=["POST"])
+def test_ai() -> tuple:
+  """
+  Test AI endpoint that uses embedded AI (same as setup assistant).
+  """
+  payload: Dict[str, Any] = request.get_json(force=True, silent=True) or {}
+  message = payload.get("message")
+  
+  if not message:
+    return jsonify({"error": "message is required"}), 400
+  
+  try:
+    if USE_EMBEDDED_AI or GROQ_API_KEY:
+      system_prompt = (
+        "You are a helpful AI assistant. Respond to the user's question in a clear and concise manner."
+      )
+      
+      messages: List[Dict[str, str]] = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": message},
+      ]
+      
+      content, key_idx = _groq_chat_completion(messages, LLAMA_MODEL, temperature=0.7, max_tokens=512)
+      
+      return jsonify({
+        "reply": content,
+        "model_used": LLAMA_MODEL,
+        "groq_key_index": key_idx
+      }), 200
+    else:
+      return jsonify({"error": "Embedded AI not configured"}), 500
+      
+  except Exception as exc:
+    app.logger.error(f"Test AI error: {exc}")
+    return jsonify({"error": "AI service temporarily unavailable"}), 500
+
+
 @app.route("/tenants/<int:tenant_id>/personalization", methods=["GET", "POST"])
 def customer_personalization(tenant_id: int) -> tuple:
   """

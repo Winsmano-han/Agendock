@@ -5026,6 +5026,18 @@ def test_whatsapp_notification(tenant_id: int) -> tuple:
   }), 200
 
 
+@app.route("/debug-config", methods=["GET"])
+def debug_config() -> tuple:
+  """Debug endpoint to check AI configuration."""
+  return jsonify({
+    "USE_EMBEDDED_AI": USE_EMBEDDED_AI,
+    "GROQ_API_KEY_SET": bool(GROQ_API_KEY),
+    "GROQ_API_KEYS_COUNT": len(GROQ_API_KEYS),
+    "GROQ_PACKAGE_AVAILABLE": Groq is not None,
+    "AI_SERVICE_URL": AI_SERVICE_URL,
+    "LLAMA_MODEL": LLAMA_MODEL
+  }), 200
+
 @app.route("/test-ai", methods=["POST"])
 def test_ai() -> tuple:
   """

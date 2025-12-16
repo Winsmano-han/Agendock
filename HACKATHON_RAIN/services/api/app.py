@@ -1286,6 +1286,18 @@ def health() -> tuple:
   return jsonify({"status": "ok", "service": "api"}), 200
 
 
+@app.route("/webhook/test", methods=["GET", "POST"])
+def webhook_test() -> Response:
+  """Test endpoint to verify webhook connectivity."""
+  app.logger.info(f"Webhook test called - Method: {request.method}")
+  app.logger.info(f"Headers: {dict(request.headers)}")
+  if request.method == "POST":
+    app.logger.info(f"Form data: {dict(request.form)}")
+    app.logger.info(f"JSON data: {request.get_json(silent=True)}")
+  
+  return Response("Webhook test successful", status=200)
+
+
 @app.route("/db-test", methods=["GET"])
 def db_test() -> tuple:
   """Test database connectivity and return connection info."""
@@ -3403,20 +3415,34 @@ def whatsapp_route() -> tuple:
   return jsonify({"reply": reply_text, "tenant_id": tenant.id}), 200
 
 
-@app.route("/webhook/whatsapp", methods=["POST"])
+@app.route("/webhook/whatsapp", methods=["POST", "GET"])
 def twilio_whatsapp_webhook() -> Response:
   """
   Twilio WhatsApp sandbox webhook.
   Twilio sends form-encoded fields like: Body, From, ProfileName.
   We return TwiML so Twilio sends the message back to the user.
   """
+  # Log all incoming requests for debugging
+  app.logger.info(f"WhatsApp webhook called - Method: {request.method}")
+  app.logger.info(f"Headers: {dict(request.headers)}")
+  app.logger.info(f"Form data: {dict(request.form)}")
+  app.logger.info(f"Query params: {dict(request.args)}")
+  
+  # Handle GET requests (Twilio webhook validation)
+  if request.method == "GET":
+    app.logger.info("GET request received - webhook validation")
+    return Response("Webhook endpoint is active", status=200)
+  
   form = request.form or {}
   raw_message = (form.get("Body") or "").strip()
   from_wa = (form.get("From") or "").strip()
   customer_name_raw = (form.get("ProfileName") or "").strip()
   customer_phone_raw = normalize_phone(from_wa)
+  
+  app.logger.info(f"Parsed - Message: '{raw_message}', From: '{from_wa}', Name: '{customer_name_raw}'")
 
   if not raw_message or not customer_phone_raw:
+    app.logger.warning(f"Missing required data - Message: '{raw_message}', Phone: '{customer_phone_raw}'")
     xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response></Response>"
     return Response(xml, mimetype="application/xml")
 
@@ -3503,6 +3529,7 @@ def twilio_whatsapp_webhook() -> Response:
     + xml_escape(reply_text or "")
     + "</Message></Response>"
   )
+  app.logger.info(f"Sending TwiML response: {xml}")
   return Response(xml, mimetype="application/xml")
 
 

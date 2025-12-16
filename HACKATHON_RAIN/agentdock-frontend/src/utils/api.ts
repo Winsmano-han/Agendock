@@ -463,6 +463,15 @@ export const api = {
     }>
   },
 
+  async requestPasswordReset(email: string) {
+    const response = await fetch(`${getApiBaseUrl()}/auth/request-password-reset`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    })
+    return response.json()
+  },
+
   async getAnalytics(tenantId: number) {
     return fetchJson(`${getApiBaseUrl()}/tenants/${tenantId}/analytics`, {
       headers: { ...getAuthHeaders() },

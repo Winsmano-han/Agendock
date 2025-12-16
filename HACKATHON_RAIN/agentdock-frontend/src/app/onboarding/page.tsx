@@ -586,12 +586,23 @@ export default function OnboardingPage() {
                               pattern="[0-9]*"
                               value={s.price == null ? '' : String(s.price)}
                               onChange={(e) => {
-                                const digitsOnly = e.target.value.replace(/[^\d]/g, '')
-                                const normalized = digitsOnly.replace(/^0+(?=\d)/, '')
-                                updateService(idx, {
-                                  price:
-                                    normalized === '' ? undefined : Number(normalized),
-                                })
+                                const value = e.target.value
+                                if (value === '') {
+                                  updateService(idx, { price: undefined })
+                                  return
+                                }
+                                const digitsOnly = value.replace(/[^\d]/g, '')
+                                if (digitsOnly === '') {
+                                  updateService(idx, { price: undefined })
+                                  return
+                                }
+                                updateService(idx, { price: Number(digitsOnly) })
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Backspace' && e.currentTarget.value === '0') {
+                                  e.preventDefault()
+                                  updateService(idx, { price: undefined })
+                                }
                               }}
                               className={inputBase}
                               placeholder="3000"
@@ -601,13 +612,23 @@ export default function OnboardingPage() {
                             <label className={labelBase}>Duration (mins)</label>
                             <input
                               type="number"
-                              value={s.duration_minutes ?? 0}
-                              onChange={(e) =>
-                                updateService(idx, {
-                                  duration_minutes: Number(e.target.value),
-                                })
-                              }
+                              value={s.duration_minutes ?? ''}
+                              onChange={(e) => {
+                                const value = e.target.value
+                                if (value === '') {
+                                  updateService(idx, { duration_minutes: undefined })
+                                  return
+                                }
+                                updateService(idx, { duration_minutes: Number(value) })
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Backspace' && e.currentTarget.value === '0') {
+                                  e.preventDefault()
+                                  updateService(idx, { duration_minutes: undefined })
+                                }
+                              }}
                               className={inputBase}
+                              placeholder="30"
                             />
                           </div>
                           <div className="sm:col-span-2">

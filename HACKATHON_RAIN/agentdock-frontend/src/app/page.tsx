@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { useState, useEffect } from 'react'
 
 export default function HomePage() {
@@ -54,10 +55,14 @@ export default function HomePage() {
       {/* Navigation */}
       <nav className="relative z-50 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center">
-              <span className="text-white font-bold text-lg">A</span>
-            </div>
+          <div className="flex items-center space-x-3">
+            <Image 
+              src="/logo.png" 
+              alt="AgentDock Logo" 
+              width={40} 
+              height={40} 
+              className="rounded-xl"
+            />
             <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
               AgentDock
             </span>
@@ -259,10 +264,14 @@ export default function HomePage() {
       {/* Footer */}
       <footer className="relative z-10 px-6 py-12 border-t border-slate-200/50 dark:border-slate-800/50">
         <div className="max-w-7xl mx-auto text-center">
-          <div className="flex items-center justify-center space-x-2 mb-4">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold">A</span>
-            </div>
+          <div className="flex items-center justify-center space-x-3 mb-4">
+            <Image 
+              src="/logo.png" 
+              alt="AgentDock Logo" 
+              width={32} 
+              height={32} 
+              className="rounded-lg"
+            />
             <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
               AgentDock
             </span>

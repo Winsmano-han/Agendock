@@ -317,7 +317,47 @@ export const api = {
   },
 
   async updateAppointmentStatus(appointmentId: number, status: string) {
-    return fetchJson(`${getApiBaseUrl()}/appointments/${appointmentId}`, {
+    return fetchJson(`${getApiBaseUrl()}/appointments/${appointmentId}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify({ status }),
+    })
+  },
+
+  async getOrders(tenantId: number) {
+    return fetchJson(`${getApiBaseUrl()}/tenants/${tenantId}/orders`, {
+      headers: { ...getAuthHeaders() },
+    })
+  },
+
+  async updateOrderStatus(orderId: number, status: string) {
+    return fetchJson(`${getApiBaseUrl()}/orders/${orderId}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify({ status }),
+    })
+  },
+
+  async getComplaints(tenantId: number) {
+    return fetchJson(`${getApiBaseUrl()}/tenants/${tenantId}/complaints`, {
+      headers: { ...getAuthHeaders() },
+    })
+  },
+
+  async updateComplaintStatus(complaintId: number, status: string, notes?: string) {
+    return fetchJson(`${getApiBaseUrl()}/complaints/${complaintId}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify({ status, notes }),
+    })
+  },
+
+  async getAnalytics(tenantId: number) {
+    return fetchJson(`${getApiBaseUrl()}/tenants/${tenantId}/analytics`, {
+      headers: { ...getAuthHeaders() },
+    })
+  },
+}tchJson(`${getApiBaseUrl()}/appointments/${appointmentId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
       body: JSON.stringify({ status }),

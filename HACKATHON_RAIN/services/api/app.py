@@ -3290,29 +3290,33 @@ def demo_chat() -> tuple:
   Simple local chat endpoint so you can use an AgentDock agent
   without WhatsApp. This is ideal while WhatsApp API setup is blocked.
   """
-  payload: Dict[str, Any] = request.get_json(force=True, silent=True) or {}
-  tenant_id = payload.get("tenant_id")
-  message_text = payload.get("message")
-  customer_name_raw = (payload.get("customer_name") or "").strip()
-  customer_phone_raw = normalize_phone(payload.get("customer_phone"))
+  try:
+    payload: Dict[str, Any] = request.get_json(force=True, silent=True) or {}
+    tenant_id = payload.get("tenant_id")
+    message_text = payload.get("message")
+    customer_name_raw = (payload.get("customer_name") or "").strip()
+    customer_phone_raw = normalize_phone(payload.get("customer_phone"))
 
-  if not tenant_id or not message_text:
-    return jsonify({"error": "tenant_id and message are required"}), 400
+    if not tenant_id or not message_text:
+      return jsonify({"error": "tenant_id and message are required"}), 400
 
-  db: Session = request.db
-  tenant = db.get(Tenant, tenant_id)
-  if tenant is None:
-    return jsonify({"error": "tenant not found"}), 404
+    db: Session = request.db
+    tenant = db.get(Tenant, tenant_id)
+    if tenant is None:
+      return jsonify({"error": "tenant not found"}), 404
 
-  reply_text = handle_incoming_message(
-    db,
-    tenant,
-    message_text,
-    customer_name_raw,
-    customer_phone_raw,
-  )
+    reply_text = handle_incoming_message(
+      db,
+      tenant,
+      message_text,
+      customer_name_raw,
+      customer_phone_raw,
+    )
 
-  return jsonify({"reply": reply_text}), 200
+    return jsonify({"reply": reply_text}), 200
+  except Exception as exc:
+    app.logger.error(f"Demo chat error: {exc}", exc_info=True)
+    return jsonify({"error": f"Internal error: {str(exc)}"}), 500
 
 
 @app.route("/whatsapp/route", methods=["POST"])

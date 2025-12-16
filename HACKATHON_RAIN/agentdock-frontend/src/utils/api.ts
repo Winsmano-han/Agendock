@@ -171,12 +171,33 @@ export const api = {
   },
 
   async demoChat(data: { tenant_id: number; message: string; customer_name?: string; customer_phone?: string }) {
-    const response = await fetch(`${getApiBaseUrl()}/demo/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    })
-    return response.json()
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/demo/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+      if (!response.ok) {
+        // Fallback to test-ai endpoint if demo/chat fails
+        const fallbackResponse = await fetch(`${getApiBaseUrl()}/test-ai`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: data.message }),
+        })
+        const fallbackData = await fallbackResponse.json()
+        return { reply: fallbackData.reply }
+      }
+      return response.json()
+    } catch (error) {
+      // Final fallback
+      const fallbackResponse = await fetch(`${getApiBaseUrl()}/test-ai`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: data.message }),
+      })
+      const fallbackData = await fallbackResponse.json()
+      return { reply: fallbackData.reply }
+    }
   },
 
   async polishText(tenantId: number, field: string, text: string) {

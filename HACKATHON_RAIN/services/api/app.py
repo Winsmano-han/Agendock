@@ -3290,7 +3290,7 @@ def whatsapp_route() -> tuple:
   upper = raw_message.upper()
   if "START-" in upper:
     # Allow one-link onboarding where the join message includes START-AGXXXX.
-    # Example: "join vegetable-against START-AG6ZPM3"
+    # Example: "join human-room START-AG6ZPM3"
     parts = upper.split("START-", 1)
     code = parts[1].strip().split()[0].strip().upper()
 

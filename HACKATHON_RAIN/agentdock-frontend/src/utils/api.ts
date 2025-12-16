@@ -390,6 +390,54 @@ export const api = {
     })
   },
 
+  async login(email: string, password: string) {
+    const response = await fetch(`${getApiBaseUrl()}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    })
+
+    if (!response.ok) {
+      throw new Error('Invalid credentials')
+    }
+
+    return response.json() as Promise<{
+      tenant_id: number
+      tenant_name: string
+      business_type?: string
+      auth_token?: string
+      expires_in?: number
+      refresh_token?: string
+    }>
+  },
+
+  async requestPasswordReset(email: string) {
+    const response = await fetch(`${getApiBaseUrl()}/auth/request-password-reset`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    })
+    return response.json()
+  },
+
+  async resetPassword(resetToken: string, newPassword: string) {
+    const response = await fetch(`${getApiBaseUrl()}/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reset_token: resetToken, new_password: newPassword }),
+    })
+    return response.json()
+  },
+
+  async checkEmail(email: string) {
+    const response = await fetch(`${getApiBaseUrl()}/auth/check-email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    })
+    return response.json()
+  },
+
   async deleteProfile(tenantId: number) {
     return fetchJson(`${getApiBaseUrl()}/tenants/${tenantId}`, {
       method: 'DELETE',

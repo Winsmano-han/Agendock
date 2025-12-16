@@ -352,6 +352,44 @@ export const api = {
     })
   },
 
+  async getHandoffs(tenantId: number) {
+    return fetchJson(`${getApiBaseUrl()}/tenants/${tenantId}/handoffs`, {
+      headers: { ...getAuthHeaders() },
+    })
+  },
+
+  async updateHandoff(handoffId: number, patch: {
+    status?: string
+    assigned_to?: string | null
+    due_at?: string | null
+    resolution_notes?: string | null
+  }) {
+    return fetchJson(`${getApiBaseUrl()}/handoffs/${handoffId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify(patch || {}),
+    })
+  },
+
+  async updateOrder(orderId: number, patch: {
+    status?: string
+    assigned_to?: string | null
+    due_at?: string | null
+    resolution_notes?: string | null
+  }) {
+    return fetchJson(`${getApiBaseUrl()}/orders/${orderId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify(patch || {}),
+    })
+  },
+
+  async getTrace(tenantId: number) {
+    return fetchJson(`${getApiBaseUrl()}/tenants/${tenantId}/trace`, {
+      headers: { ...getAuthHeaders() },
+    })
+  },
+
   async deleteProfile(tenantId: number) {
     return fetchJson(`${getApiBaseUrl()}/tenants/${tenantId}`, {
       method: 'DELETE',

@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request, send_from_directory
 from flask_cors import CORS
 from flask import Response, stream_with_context
-from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, UniqueConstraint, and_, create_engine, text
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, UniqueConstraint, and_, create_engine, text, LargeBinary
 from sqlalchemy.orm import Session, declarative_base, relationship, scoped_session, sessionmaker
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -357,6 +357,16 @@ class AgentTrace(Base):
   created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class UploadedImage(Base):
+  __tablename__ = "uploaded_images"
+
+  id = Column(Integer, primary_key=True, index=True)
+  filename = Column(String, nullable=False, unique=True, index=True)
+  content_type = Column(String, nullable=False)
+  file_data = Column(LargeBinary, nullable=False)  # Binary data for images
+  created_at = Column(DateTime, default=datetime.utcnow)
+
+
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
@@ -504,6 +514,28 @@ def init_db() -> None:
           "CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_content_gin "
           "ON knowledge_chunks USING gin(to_tsvector('english', content))"
         )
+      except Exception:
+        pass
+
+      # Create uploaded_images table if it doesn't exist
+      try:
+        result = conn.exec_driver_sql(
+          "SELECT table_name FROM information_schema.tables "
+          "WHERE table_name = 'uploaded_images'"
+        )
+        if not result.fetchone():
+          conn.exec_driver_sql(
+            "CREATE TABLE uploaded_images ("
+            "id SERIAL PRIMARY KEY, "
+            "filename VARCHAR NOT NULL UNIQUE, "
+            "content_type VARCHAR NOT NULL, "
+            "file_data BYTEA NOT NULL, "
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+            ")"
+          )
+          conn.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS idx_uploaded_images_filename ON uploaded_images(filename)"
+          )
       except Exception:
         pass
 
@@ -1466,8 +1498,7 @@ def upload_knowledge(tenant_id: int) -> tuple:
 @app.route("/upload", methods=["POST"])
 def upload_image() -> tuple:
   """
-  Simple image upload endpoint for the frontend.
-  Stores files under services/api/uploads and returns a URL that the frontend can use.
+  Image upload endpoint that stores images in database for persistence across deployments.
   """
   if "file" not in request.files:
     return jsonify({"error": "file is required"}), 400
@@ -1483,11 +1514,27 @@ def upload_image() -> tuple:
   if ext not in safe_exts:
     return jsonify({"error": "unsupported file type"}), 400
 
-  filename = f"img_{int(datetime.utcnow().timestamp())}_{os.getpid()}{ext}"
-  path = os.path.join(UPLOAD_DIR, filename)
-  file.save(path)
+  # Read file data
+  file_data = file.read()
+  if len(file_data) > 5 * 1024 * 1024:  # 5MB limit
+    return jsonify({"error": "file too large (max 5MB)"}), 400
 
-  # Return full API URL so frontend can access from different domain
+  # Store in database
+  filename = f"img_{int(datetime.utcnow().timestamp())}_{os.getpid()}{ext}"
+  
+  db: Session = request.db
+  
+  # Create image record in database
+  image_record = UploadedImage(
+    filename=filename,
+    content_type=f"image/{ext[1:]}",
+    file_data=file_data,
+    created_at=datetime.utcnow()
+  )
+  db.add(image_record)
+  db.flush()
+
+  # Return API URL that serves from database
   base_url = request.host_url.rstrip('/')
   url = f"{base_url}/uploads/{filename}"
   return jsonify({"url": url}), 201
@@ -1496,9 +1543,25 @@ def upload_image() -> tuple:
 @app.route("/uploads/<path:filename>", methods=["GET"])
 def uploaded_file(filename: str):
   """
-  Serve uploaded images.
+  Serve uploaded images from database.
   """
-  return send_from_directory(UPLOAD_DIR, filename)
+  db: Session = request.db
+  
+  # Try database first
+  image_record = db.query(UploadedImage).filter(UploadedImage.filename == filename).first()
+  if image_record:
+    from flask import Response
+    return Response(
+      image_record.file_data,
+      mimetype=image_record.content_type,
+      headers={"Cache-Control": "public, max-age=31536000"}  # Cache for 1 year
+    )
+  
+  # Fallback to local file system for existing images
+  try:
+    return send_from_directory(UPLOAD_DIR, filename)
+  except:
+    return "Image not found", 404
 
 
 @app.route("/tenants", methods=["GET"])
